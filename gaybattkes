@@ -5,14 +5,51 @@ local TeleportService = game:GetService("TeleportService")
 local Players = game:GetService("Players") 
 local RunService = game:GetService("RunService")
 
--- Пряме посилання з GitHub
 local GITHUB_RAW_URL = "https://raw.githubusercontent.com/markiyanbest/slap/refs/heads/main/gaybattkes"
-
 local ConfigFile = "SlappleFarm_Settings.json" 
 local isInitializing = true 
 local noclipConnection = nil
 
--- 1. Завантаження налаштувань
+-- Змінна-дозвіл на телепорт (працює тільки під час Server Hop від нашого скрипта)
+_G.AllowTeleport = false
+
+-- 1. Anti-Teleport Hook (Блокування всіх сторонніх телепортів у грі)
+if hookmetamethod then
+    local oldNamecall
+    oldNamecall = hookmetamethod(game, "__namecall", newcclosure(function(self, ...)
+        local method = getnamecallmethod()
+        
+        -- Перехоплюємо всі методи TeleportService
+        if self == TeleportService and (method:find("Teleport") or method == "TeleportToPlaceInstance" or method == "TeleportAsync") then
+            if not _G.AllowTeleport then
+                pcall(function()
+                    OrionLib:MakeNotification({ 
+                        Name = "Anti-Teleport 🛡️", 
+                        Content = "Заблоковано спробу телепорту в інший плейс!", 
+                        Image = "rbxassetid://7733658504", 
+                        Time = 3 
+                    })
+                end)
+                return nil -- Скасовуємо виклик телепорту
+            end
+        end
+        return oldNamecall(self, ...)
+    end))
+end
+
+-- 2. Створення підземної безпечної платформи
+local safePlatform = workspace:FindFirstChild("SlappleSafePlatform")
+if not safePlatform then
+    safePlatform = Instance.new("Part")
+    safePlatform.Name = "SlappleSafePlatform"
+    safePlatform.Size = Vector3.new(30, 2, 30)
+    safePlatform.Anchored = true
+    safePlatform.Transparency = 1
+    safePlatform.CanCollide = true
+    safePlatform.Parent = workspace
+end
+
+-- 3. Завантаження налаштувань
 local function LoadSettings() 
     if isfile and readfile and isfile(ConfigFile) then 
         local success, result = pcall(function() 
@@ -32,7 +69,7 @@ local function LoadSettings()
     _G.AutoExecute = true 
 end 
 
--- 2. Збереження налаштувань
+-- 4. Збереження налаштувань
 local function SaveSettings() 
     if isInitializing then return end 
     if writefile then 
@@ -49,7 +86,7 @@ end
 
 LoadSettings() 
 
--- 3. Функція Ноукліпу (Noclip)
+-- 5. Функція Ноукліпу
 local function SetNoclip(state)
     if state then
         if not noclipConnection then
@@ -57,7 +94,7 @@ local function SetNoclip(state)
                 local char = Players.LocalPlayer.Character
                 if char then
                     for _, v in pairs(char:GetDescendants()) do
-                        if v:IsA("BasePart") then
+                        if v:IsA("BasePart") and v.Name ~= "SlappleSafePlatform" then
                             v.CanCollide = false
                         end
                     end
@@ -72,7 +109,7 @@ local function SetNoclip(state)
     end
 end
 
--- 4. Захист від порталу Бразилії
+-- 6. Захист від порталу Бразилії (додатковий тригер-блокер)
 local function DisableBrazilPortal()
     local lobby = workspace:FindFirstChild("Lobby")
     if lobby then
@@ -91,7 +128,7 @@ local OrionLib = loadstring(game:HttpGet(("https://raw.githubusercontent.com/Gia
 
 local Window = OrionLib:MakeWindow({ 
     Name = "Slapple Collector Hub 👏",  
-    IntroText = "Underground Noclip Farm",  
+    IntroText = "Underground Farm + Anti-TP",  
     IntroIcon = "rbxassetid://15315284749", 
     HidePremium = false,  
     SaveConfig = false,  
@@ -99,18 +136,13 @@ local Window = OrionLib:MakeWindow({
     ConfigFolder = "SlappleFarmConfig" 
 }) 
 
--- 5. Відстеження помилок телепортації 
+-- 7. Відстеження помилок телепортації 
 if not _G.TeleportHooked then 
     _G.TeleportHooked = true 
     TeleportService.TeleportInitFailed:Connect(function(player, teleportResult, errorMessage) 
         if player == Players.LocalPlayer then 
             _G.IsHopping = false 
-            OrionLib:MakeNotification({ 
-                Name = "Помилка Телепорту", 
-                Content = "Повторна спроба...", 
-                Image = "rbxassetid://7733658504", 
-                Time = 3 
-            }) 
+            _G.AllowTeleport = false
             task.wait(2) 
             if _G.ServerHopWhenEmpty or _G.SlappleFarm then 
                 DoServerHop() 
@@ -119,7 +151,7 @@ if not _G.TeleportHooked then
     end) 
 end 
 
--- 6. Функція входу на арену 
+-- 8. Вхід на арену 
 local function EnterArena() 
     DisableBrazilPortal()
     local char = Players.LocalPlayer.Character 
@@ -132,7 +164,7 @@ local function EnterArena()
     end 
 end 
 
--- 7. Збір під землею (Underground Position + Noclip)
+-- 9. Збір під землею з мікро-телепортом
 local function CollectSlapplesUnderground()
     local char = Players.LocalPlayer.Character
     local collectedInLoop = 0
@@ -142,26 +174,37 @@ local function CollectSlapplesUnderground()
         local arena = workspace:FindFirstChild("Arena")
 
         if arena and arena:FindFirstChild("island5") and arena.island5:FindFirstChild("Slapples") then 
-            local slappleContainer = arena.island5.Slapples
+            local island = arena.island5
+            local slappleContainer = island.Slapples
             local items = slappleContainer:GetChildren()
 
-            -- Фіксуємо персонажа ПІД землею острова (-8 блоків вниз)
+            local safeCFrame = island.CFrame * CFrame.new(0, -7, 0)
+            safePlatform.CFrame = island.CFrame * CFrame.new(0, -9, 0)
+
             pcall(function()
-                hrp.CFrame = arena.island5.CFrame * CFrame.new(0, -8, 0)
+                hrp.CFrame = safeCFrame
                 hrp.AssemblyLinearVelocity = Vector3.zero
-                hrp.AssemblyAngularVelocity = Vector3.zero
             end)
-            task.wait(0.2)
+            task.wait(0.1)
 
             if #items > 0 then
                 for _, v in pairs(items) do 
-                    if (v.Name == "Slapple" or v.Name == "GoldenSlapple") and v:FindFirstChild("Glove") and v.Glove:FindFirstChildWhichIsA("TouchTransmitter") then 
+                    if _G.SlappleFarm and (v.Name == "Slapple" or v.Name == "GoldenSlapple") and v:FindFirstChild("Glove") and v.Glove:FindFirstChildWhichIsA("TouchTransmitter") then 
                         collectedInLoop = collectedInLoop + 1 
+
+                        pcall(function()
+                            hrp.CFrame = v.Glove.CFrame
+                            firetouchinterest(hrp, v.Glove, 0) 
+                            firetouchinterest(hrp, v.Glove, 1) 
+                        end)
                         
-                        -- Збір дистанційно через TouchTransmitter
-                        firetouchinterest(hrp, v.Glove, 0) 
-                        firetouchinterest(hrp, v.Glove, 1) 
-                        
+                        task.wait(0.05)
+
+                        pcall(function()
+                            hrp.CFrame = safeCFrame
+                            hrp.AssemblyLinearVelocity = Vector3.zero
+                        end)
+
                         task.wait(math.random(15, 25) / 100) 
                     end 
                 end 
@@ -171,10 +214,11 @@ local function CollectSlapplesUnderground()
     return collectedInLoop
 end
 
--- 8. Server Hop
+-- 10. Надійний Server Hop (із тимчасовим дозволом телепорту)
 function DoServerHop() 
     if _G.IsHopping then return end 
     _G.IsHopping = true 
+    _G.AllowTeleport = true -- Дозволяємо телепорт для нашого Server Hop
 
     SaveSettings() 
 
@@ -231,10 +275,11 @@ function DoServerHop()
 
     task.delay(7, function()
         _G.IsHopping = false 
+        _G.AllowTeleport = false
     end)
 end 
 
--- 9. Вкладки та UI
+-- 11. Інтерфейс
 local Tab = Window:MakeTab({ 
     Name = "Slapples Farm", 
     Icon = "rbxassetid://7733673987", 
@@ -269,11 +314,10 @@ Tab:AddToggle({
                         emptyChecks = 0
                     end
 
-                    -- Якщо дерево порожнє більше 3 циклів перевірки (близько 6-8 сек), робимо Server Hop
                     if _G.ServerHopWhenEmpty and emptyChecks >= 3 and char and char:FindFirstChild("entered") and not _G.IsHopping then 
                         OrionLib:MakeNotification({ 
                             Name = "Slapple Farm", 
-                            Content = "Дерево порожнє. Міняємо сервер...", 
+                            Content = "Дерево порожнє. Зміна сервера...", 
                             Image = "rbxassetid://7734053426", 
                             Time = 3 
                         }) 
@@ -283,7 +327,7 @@ Tab:AddToggle({
                         break
                     end 
                     
-                    task.wait(1) 
+                    task.wait(0.8) 
                 end 
             end) 
         end 
@@ -309,7 +353,7 @@ Tab:AddToggle({
 }) 
 
 Tab:AddToggle({ 
-    Name = "Server Hop (Коли немає яблук)", 
+    Name = "Server Hop (Якщо немає яблук)", 
     Default = _G.ServerHopWhenEmpty, 
     Callback = function(Value) 
         _G.ServerHopWhenEmpty = Value 
@@ -318,7 +362,7 @@ Tab:AddToggle({
 }) 
 
 Tab:AddToggle({ 
-    Name = "Auto-Execute (Збереження у файл)", 
+    Name = "Auto-Execute (Автозбереження)", 
     Default = _G.AutoExecute, 
     Callback = function(Value) 
         _G.AutoExecute = Value 
