@@ -8,9 +8,9 @@ local Players = game:GetService("Players")
 local GITHUB_RAW_URL = "https://raw.githubusercontent.com/markiyanbest/slap/refs/heads/main/gaybattkes"
 
 local ConfigFile = "SlappleFarm_Settings.json" 
-local isInitializing = true -- Захист від затирання конфігу під час створення UI
+local isInitializing = true 
 
--- 1. Завантаження налаштувань з файлу 
+-- 1. Завантаження налаштувань
 local function LoadSettings() 
     if isfile and readfile and isfile(ConfigFile) then 
         local success, result = pcall(function() 
@@ -30,9 +30,9 @@ local function LoadSettings()
     _G.AutoExecute = true 
 end 
 
--- 2. Безпечне збереження налаштувань
+-- 2. Збереження налаштувань
 local function SaveSettings() 
-    if isInitializing then return end -- Ігноруємо авто-виклики при ініціалізації UI
+    if isInitializing then return end 
     if writefile then 
         pcall(function() 
             writefile(ConfigFile, HttpService:JSONEncode({ 
@@ -66,7 +66,7 @@ local OrionLib = loadstring(game:HttpGet(("https://raw.githubusercontent.com/Gia
 
 local Window = OrionLib:MakeWindow({ 
     Name = "Slapple Collector Hub 👏",  
-    IntroText = "Slapple Farm Ready",  
+    IntroText = "Safe Anti-Offset Farm",  
     IntroIcon = "rbxassetid://15315284749", 
     HidePremium = false,  
     SaveConfig = false,  
@@ -107,7 +107,36 @@ local function EnterArena()
     end 
 end 
 
--- 6. Надійний Server Hop із викликом твого GitHub
+-- 6. Безпечний збір яблук (вглиб острова + людські затримки)
+local function CollectSlapplesSafe()
+    local char = Players.LocalPlayer.Character
+    local collectedInLoop = 0
+    if char and char:FindFirstChild("HumanoidRootPart") and char:FindFirstChild("entered") then 
+        local arena = workspace:FindFirstChild("Arena")
+        if arena and arena:FindFirstChild("island5") and arena.island5:FindFirstChild("Slapples") then 
+            for _, v in pairs(arena.island5.Slapples:GetChildren()) do 
+                if (v.Name == "Slapple" or v.Name == "GoldenSlapple") and v:FindFirstChild("Glove") and v.Glove:FindFirstChildWhichIsA("TouchTransmitter") then 
+                    collectedInLoop = collectedInLoop + 1 
+                    
+                    -- [Пункт 1]: Переміщуємо персонажа вглиб текстури під яблуком (Anti-offset обхід)
+                    pcall(function()
+                        char.HumanoidRootPart.CFrame = v.Glove.CFrame * CFrame.new(0, -2.5, 0)
+                    end)
+                    task.wait(0.05)
+                    
+                    firetouchinterest(char.HumanoidRootPart, v.Glove, 0) 
+                    firetouchinterest(char.HumanoidRootPart, v.Glove, 1) 
+                    
+                    -- [Пункт 2]: Випадкова людська затримка між збором (0.25 - 0.40 сек)
+                    task.wait(math.random(25, 40) / 100) 
+                end 
+            end 
+        end 
+    end 
+    return collectedInLoop
+end
+
+-- 7. Надійний Server Hop
 function DoServerHop() 
     if _G.IsHopping then return end 
     _G.IsHopping = true 
@@ -121,7 +150,6 @@ function DoServerHop()
         Time = 3 
     }) 
 
-    -- Авто-екзекют під час хопу з обходом кешу GitHub (?v=tick())
     if _G.AutoExecute then 
         local q = queue_on_teleport or queueonteleport or (syn and syn.queue_on_teleport) or (fluxus and fluxus.queue_on_teleport) or (getgenv and (getgenv().queue_on_teleport or getgenv().queueonteleport))
         
@@ -171,7 +199,7 @@ function DoServerHop()
     end)
 end 
 
--- 7. Вкладки та UI
+-- 8. Вкладки та UI
 local Tab = Window:MakeTab({ 
     Name = "Slapples Farm", 
     Icon = "rbxassetid://7733673987", 
@@ -195,28 +223,19 @@ Tab:AddToggle({
                         task.wait(1) 
                     end 
 
-                    local collectedInLoop = 0 
-                    if char and char:FindFirstChild("HumanoidRootPart") and char:FindFirstChild("entered") then 
-                        local arena = workspace:FindFirstChild("Arena")
-                        if arena and arena:FindFirstChild("island5") and arena.island5:FindFirstChild("Slapples") then 
-                            for _, v in pairs(arena.island5.Slapples:GetChildren()) do 
-                                if (v.Name == "Slapple" or v.Name == "GoldenSlapple") and v:FindFirstChild("Glove") and v.Glove:FindFirstChildWhichIsA("TouchTransmitter") then 
-                                    collectedInLoop = collectedInLoop + 1 
-                                    firetouchinterest(char.HumanoidRootPart, v.Glove, 0) 
-                                    firetouchinterest(char.HumanoidRootPart, v.Glove, 1) 
-                                    task.wait(0.05) 
-                                end 
-                            end 
-                        end 
-                    end 
+                    local collectedInLoop = CollectSlapplesSafe()
 
                     if _G.ServerHopWhenEmpty and collectedInLoop == 0 and char and char:FindFirstChild("entered") and not _G.IsHopping then 
                         OrionLib:MakeNotification({ 
                             Name = "Slapple Farm", 
-                            Content = "Дерево порожнє! Телепортуємось...", 
+                            Content = "Дерево порожнє! Пауза перед хопом...", 
                             Image = "rbxassetid://7734053426", 
                             Time = 3 
                         }) 
+                        
+                        -- [Пункт 3]: Затримка перед хопом (1.5 - 2.5 сек) для безпроблемних логів
+                        task.wait(math.random(15, 25) / 10) 
+                        
                         DoServerHop() 
                         task.wait(5) 
                     end 
@@ -271,5 +290,4 @@ Tab:AddButton({
     end 
 }) 
 
--- Дозволяємо збереження файлу (UI сформовано)
 isInitializing = false
