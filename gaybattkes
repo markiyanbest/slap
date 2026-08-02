@@ -3,12 +3,14 @@ if not game:IsLoaded() then game.Loaded:Wait() end
 local HttpService = game:GetService("HttpService") 
 local TeleportService = game:GetService("TeleportService") 
 local Players = game:GetService("Players") 
+local RunService = game:GetService("RunService")
 
--- Твоє пряме посилання з GitHub:
+-- Пряме посилання з GitHub
 local GITHUB_RAW_URL = "https://raw.githubusercontent.com/markiyanbest/slap/refs/heads/main/gaybattkes"
 
 local ConfigFile = "SlappleFarm_Settings.json" 
 local isInitializing = true 
+local noclipConnection = nil
 
 -- 1. Завантаження налаштувань
 local function LoadSettings() 
@@ -47,7 +49,30 @@ end
 
 LoadSettings() 
 
--- 3. Захист від порталу Бразилії
+-- 3. Функція Ноукліпу (Noclip)
+local function SetNoclip(state)
+    if state then
+        if not noclipConnection then
+            noclipConnection = RunService.Stepped:Connect(function()
+                local char = Players.LocalPlayer.Character
+                if char then
+                    for _, v in pairs(char:GetDescendants()) do
+                        if v:IsA("BasePart") then
+                            v.CanCollide = false
+                        end
+                    end
+                end
+            end)
+        end
+    else
+        if noclipConnection then
+            noclipConnection:Disconnect()
+            noclipConnection = nil
+        end
+    end
+end
+
+-- 4. Захист від порталу Бразилії
 local function DisableBrazilPortal()
     local lobby = workspace:FindFirstChild("Lobby")
     if lobby then
@@ -66,7 +91,7 @@ local OrionLib = loadstring(game:HttpGet(("https://raw.githubusercontent.com/Gia
 
 local Window = OrionLib:MakeWindow({ 
     Name = "Slapple Collector Hub 👏",  
-    IntroText = "Safe Anti-Offset Farm",  
+    IntroText = "Underground Noclip Farm",  
     IntroIcon = "rbxassetid://15315284749", 
     HidePremium = false,  
     SaveConfig = false,  
@@ -74,7 +99,7 @@ local Window = OrionLib:MakeWindow({
     ConfigFolder = "SlappleFarmConfig" 
 }) 
 
--- 4. Відстеження помилок телепортації 
+-- 5. Відстеження помилок телепортації 
 if not _G.TeleportHooked then 
     _G.TeleportHooked = true 
     TeleportService.TeleportInitFailed:Connect(function(player, teleportResult, errorMessage) 
@@ -94,7 +119,7 @@ if not _G.TeleportHooked then
     end) 
 end 
 
--- 5. Функція входу на арену 
+-- 6. Функція входу на арену 
 local function EnterArena() 
     DisableBrazilPortal()
     local char = Players.LocalPlayer.Character 
@@ -107,36 +132,46 @@ local function EnterArena()
     end 
 end 
 
--- 6. Безпечний збір яблук (вглиб острова + людські затримки)
-local function CollectSlapplesSafe()
+-- 7. Збір під землею (Underground Position + Noclip)
+local function CollectSlapplesUnderground()
     local char = Players.LocalPlayer.Character
     local collectedInLoop = 0
+
     if char and char:FindFirstChild("HumanoidRootPart") and char:FindFirstChild("entered") then 
+        local hrp = char.HumanoidRootPart
         local arena = workspace:FindFirstChild("Arena")
+
         if arena and arena:FindFirstChild("island5") and arena.island5:FindFirstChild("Slapples") then 
-            for _, v in pairs(arena.island5.Slapples:GetChildren()) do 
-                if (v.Name == "Slapple" or v.Name == "GoldenSlapple") and v:FindFirstChild("Glove") and v.Glove:FindFirstChildWhichIsA("TouchTransmitter") then 
-                    collectedInLoop = collectedInLoop + 1 
-                    
-                    -- [Пункт 1]: Переміщуємо персонажа вглиб текстури під яблуком (Anti-offset обхід)
-                    pcall(function()
-                        char.HumanoidRootPart.CFrame = v.Glove.CFrame * CFrame.new(0, -2.5, 0)
-                    end)
-                    task.wait(0.05)
-                    
-                    firetouchinterest(char.HumanoidRootPart, v.Glove, 0) 
-                    firetouchinterest(char.HumanoidRootPart, v.Glove, 1) 
-                    
-                    -- [Пункт 2]: Випадкова людська затримка між збором (0.25 - 0.40 сек)
-                    task.wait(math.random(25, 40) / 100) 
+            local slappleContainer = arena.island5.Slapples
+            local items = slappleContainer:GetChildren()
+
+            -- Фіксуємо персонажа ПІД землею острова (-8 блоків вниз)
+            pcall(function()
+                hrp.CFrame = arena.island5.CFrame * CFrame.new(0, -8, 0)
+                hrp.AssemblyLinearVelocity = Vector3.zero
+                hrp.AssemblyAngularVelocity = Vector3.zero
+            end)
+            task.wait(0.2)
+
+            if #items > 0 then
+                for _, v in pairs(items) do 
+                    if (v.Name == "Slapple" or v.Name == "GoldenSlapple") and v:FindFirstChild("Glove") and v.Glove:FindFirstChildWhichIsA("TouchTransmitter") then 
+                        collectedInLoop = collectedInLoop + 1 
+                        
+                        -- Збір дистанційно через TouchTransmitter
+                        firetouchinterest(hrp, v.Glove, 0) 
+                        firetouchinterest(hrp, v.Glove, 1) 
+                        
+                        task.wait(math.random(15, 25) / 100) 
+                    end 
                 end 
-            end 
+            end
         end 
     end 
     return collectedInLoop
 end
 
--- 7. Надійний Server Hop
+-- 8. Server Hop
 function DoServerHop() 
     if _G.IsHopping then return end 
     _G.IsHopping = true 
@@ -199,7 +234,7 @@ function DoServerHop()
     end)
 end 
 
--- 8. Вкладки та UI
+-- 9. Вкладки та UI
 local Tab = Window:MakeTab({ 
     Name = "Slapples Farm", 
     Icon = "rbxassetid://7733673987", 
@@ -207,14 +242,17 @@ local Tab = Window:MakeTab({
 }) 
 
 Tab:AddToggle({ 
-    Name = "Autofarm Slapples", 
+    Name = "Autofarm Slapples (Під землею)", 
     Default = _G.SlappleFarm, 
     Callback = function(Value) 
         _G.SlappleFarm = Value 
         SaveSettings() 
+        SetNoclip(Value)
 
         if Value then 
             task.spawn(function() 
+                local emptyChecks = 0
+
                 while _G.SlappleFarm do 
                     local char = Players.LocalPlayer.Character 
                     
@@ -223,24 +261,29 @@ Tab:AddToggle({
                         task.wait(1) 
                     end 
 
-                    local collectedInLoop = CollectSlapplesSafe()
+                    local collectedInLoop = CollectSlapplesUnderground()
 
-                    if _G.ServerHopWhenEmpty and collectedInLoop == 0 and char and char:FindFirstChild("entered") and not _G.IsHopping then 
+                    if collectedInLoop == 0 then
+                        emptyChecks = emptyChecks + 1
+                    else
+                        emptyChecks = 0
+                    end
+
+                    -- Якщо дерево порожнє більше 3 циклів перевірки (близько 6-8 сек), робимо Server Hop
+                    if _G.ServerHopWhenEmpty and emptyChecks >= 3 and char and char:FindFirstChild("entered") and not _G.IsHopping then 
                         OrionLib:MakeNotification({ 
                             Name = "Slapple Farm", 
-                            Content = "Дерево порожнє! Пауза перед хопом...", 
+                            Content = "Дерево порожнє. Міняємо сервер...", 
                             Image = "rbxassetid://7734053426", 
                             Time = 3 
                         }) 
                         
-                        -- [Пункт 3]: Затримка перед хопом (1.5 - 2.5 сек) для безпроблемних логів
-                        task.wait(math.random(15, 25) / 10) 
-                        
+                        task.wait(1) 
                         DoServerHop() 
-                        task.wait(5) 
+                        break
                     end 
                     
-                    task.wait(0.5) 
+                    task.wait(1) 
                 end 
             end) 
         end 
@@ -248,7 +291,7 @@ Tab:AddToggle({
 }) 
 
 Tab:AddToggle({ 
-    Name = "Auto Enter Arena (Авто-вхід)", 
+    Name = "Auto Enter Arena", 
     Default = _G.AutoEnterArena, 
     Callback = function(Value) 
         _G.AutoEnterArena = Value 
@@ -266,7 +309,7 @@ Tab:AddToggle({
 }) 
 
 Tab:AddToggle({ 
-    Name = "Server Hop (Коли все зібрано)", 
+    Name = "Server Hop (Коли немає яблук)", 
     Default = _G.ServerHopWhenEmpty, 
     Callback = function(Value) 
         _G.ServerHopWhenEmpty = Value 
