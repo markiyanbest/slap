@@ -10,7 +10,7 @@ local ConfigFile = "SlappleFarm_Settings.json"
 local isInitializing = true 
 local noclipConnection = nil
 
--- Змінна-дозвіл на телепорт
+-- Змінна-дозвіл на телепорт (для Server Hop)
 _G.AllowTeleport = false
 
 -- 1. Anti-Teleport Hook
@@ -24,7 +24,7 @@ if hookmetamethod then
                 pcall(function()
                     OrionLib:MakeNotification({ 
                         Name = "Anti-Teleport 🛡️", 
-                        Content = "Заблоковано спробу телепорту в інший плейс!", 
+                        Content = "Заблоковано сторонній телепорт!", 
                         Image = "rbxassetid://7733658504", 
                         Time = 3 
                     })
@@ -64,7 +64,7 @@ local function LoadSettings()
     end 
     _G.SlappleFarm = false 
     _G.AutoEnterArena = false 
-    _G.ServerHopWhenEmpty = false 
+    _G.ServerHopWhenEmpty = true 
     _G.AutoExecute = true 
 end 
 
@@ -108,7 +108,7 @@ local function SetNoclip(state)
     end
 end
 
--- 6. Захист від порталу Бразилії
+-- 6. Блокування порталу Бразилії
 local function DisableBrazilPortal()
     local lobby = workspace:FindFirstChild("Lobby")
     if lobby then
@@ -127,7 +127,7 @@ local OrionLib = loadstring(game:HttpGet(("https://raw.githubusercontent.com/Gia
 
 local Window = OrionLib:MakeWindow({ 
     Name = "Slapple Collector Hub 👏",  
-    IntroText = "Underground Farm + Anti-TP",  
+    IntroText = "Instant Remote Farm + Fast Hop",  
     IntroIcon = "rbxassetid://15315284749", 
     HidePremium = false,  
     SaveConfig = false,  
@@ -142,8 +142,8 @@ if not _G.TeleportHooked then
         if player == Players.LocalPlayer then 
             _G.IsHopping = false 
             _G.AllowTeleport = false
-            task.wait(2) 
-            if _G.ServerHopWhenEmpty or _G.SlappleFarm then 
+            task.wait(1.5) 
+            if _G.SlappleFarm then 
                 DoServerHop() 
             end 
         end 
@@ -163,7 +163,7 @@ local function EnterArena()
     end 
 end 
 
--- Універсальна функція знаходження деталі для торкання
+-- Пошук деталі підбору
 local function GetSlappleTouchPart(slapple)
     if slapple:FindFirstChild("Glove") and slapple.Glove:IsA("BasePart") then
         return slapple.Glove
@@ -179,8 +179,8 @@ local function GetSlappleTouchPart(slapple)
     return nil
 end
 
--- 9. Покращений збір під землею
-local function CollectSlapplesUnderground()
+-- 9. Збір БЕЗ телепортації (Дистанційний дотик під землею)
+local function CollectSlapplesRemote()
     local char = Players.LocalPlayer.Character
     local collectedInLoop = 0
 
@@ -193,54 +193,35 @@ local function CollectSlapplesUnderground()
             local slappleContainer = island.Slapples
             local items = slappleContainer:GetChildren()
 
-            -- Безпечне отримання CFrame (підтримка як Part, так і Model)
             local islandCFrame = island:IsA("Model") and island:GetPivot() or island.CFrame
-            local safeCFrame = islandCFrame * CFrame.new(0, -12, 0)
-            safePlatform.CFrame = islandCFrame * CFrame.new(0, -14, 0)
+            local safeCFrame = islandCFrame * CFrame.new(0, -15, 0)
+            safePlatform.CFrame = islandCFrame * CFrame.new(0, -17, 0)
 
-            pcall(function()
-                hrp.CFrame = safeCFrame
-                hrp.AssemblyLinearVelocity = Vector3.zero
-            end)
-            task.wait(0.1)
+            -- Позиціонуємось під землею 1 раз
+            if (hrp.Position - safeCFrame.Position).Magnitude > 5 then
+                pcall(function()
+                    hrp.CFrame = safeCFrame
+                    hrp.AssemblyLinearVelocity = Vector3.zero
+                end)
+                task.wait(0.2)
+            end
 
-            if #items > 0 then
-                for _, v in pairs(items) do 
-                    if not _G.SlappleFarm then break end
+            -- Збираємо всі яблука з місця, не тепаючись до кожного
+            for _, v in pairs(items) do 
+                if not _G.SlappleFarm then break end
 
-                    -- Перевіряємо, чи це яблуко/перчатка
-                    if v.Name == "Slapple" or v.Name == "GoldenSlapple" or v.Name:find("Slapple") then 
-                        local targetPart = GetSlappleTouchPart(v)
+                if v.Name == "Slapple" or v.Name == "GoldenSlapple" or v.Name:find("Slapple") then 
+                    local targetPart = GetSlappleTouchPart(v)
 
-                        if targetPart then
-                            local touchSuccess = false
-
-                            pcall(function()
-                                -- Тимчасове переміщення гравця до яблука
-                                hrp.CFrame = targetPart.CFrame
-                                
-                                -- Посилений симульований дотик
-                                firetouchinterest(hrp, targetPart, 0) 
-                                task.wait(0.02)
-                                firetouchinterest(hrp, targetPart, 1) 
-                                touchSuccess = true
-                            end)
-
-                            if touchSuccess then
-                                collectedInLoop = collectedInLoop + 1 
-                            end
-                            
-                            task.wait(0.05)
-
-                            -- Повернення на підземну платформу
-                            pcall(function()
-                                hrp.CFrame = safeCFrame
-                                hrp.AssemblyLinearVelocity = Vector3.zero
-                            end)
-
-                            task.wait(math.random(15, 25) / 100) 
-                        end
-                    end 
+                    if targetPart then
+                        pcall(function()
+                            firetouchinterest(hrp, targetPart, 0) 
+                            task.wait(0.01)
+                            firetouchinterest(hrp, targetPart, 1) 
+                        end)
+                        collectedInLoop = collectedInLoop + 1 
+                        task.wait(0.03) -- Мікро-затримка для гарантованого зарахування
+                    end
                 end 
             end
         end 
@@ -257,10 +238,10 @@ function DoServerHop()
     SaveSettings() 
 
     OrionLib:MakeNotification({ 
-        Name = "Server Hop", 
-        Content = "Шукаємо новий сервер...", 
+        Name = "Server Hop 🚀", 
+        Content = "Переходимо на новий сервер...", 
         Image = "rbxassetid://7734053426", 
-        Time = 3 
+        Time = 2 
     }) 
 
     if _G.AutoExecute then 
@@ -307,7 +288,7 @@ function DoServerHop()
         TeleportService:Teleport(placeId, Players.LocalPlayer) 
     end 
 
-    task.delay(7, function()
+    task.delay(6, function()
         _G.IsHopping = false 
         _G.AllowTeleport = false
     end)
@@ -321,7 +302,7 @@ local Tab = Window:MakeTab({
 }) 
 
 Tab:AddToggle({ 
-    Name = "Autofarm Slapples (Під землею)", 
+    Name = "Autofarm Slapples (Без ТП + Hop)", 
     Default = _G.SlappleFarm, 
     Callback = function(Value) 
         _G.SlappleFarm = Value 
@@ -330,38 +311,43 @@ Tab:AddToggle({
 
         if Value then 
             task.spawn(function() 
-                local emptyChecks = 0
-
                 while _G.SlappleFarm do 
                     local char = Players.LocalPlayer.Character 
                     
                     if char and not char:FindFirstChild("entered") then 
                         EnterArena() 
-                        task.wait(1) 
+                        task.wait(0.8) 
                     end 
 
-                    local collectedInLoop = CollectSlapplesUnderground()
+                    local collectedInLoop = CollectSlapplesRemote()
 
-                    if collectedInLoop == 0 then
-                        emptyChecks = emptyChecks + 1
-                    else
-                        emptyChecks = 0
-                    end
-
-                    if _G.ServerHopWhenEmpty and emptyChecks >= 3 and char and char:FindFirstChild("entered") and not _G.IsHopping then 
+                    -- Якщо зібрали хоч 1 яблуко — одразу Server Hop
+                    if collectedInLoop > 0 then
                         OrionLib:MakeNotification({ 
-                            Name = "Slapple Farm", 
-                            Content = "Дерево порожнє. Зміна сервера...", 
+                            Name = "Slapple Farm 🍏", 
+                            Content = "Зібрано: " .. tostring(collectedInLoop) .. " шт.! Зміна сервера...", 
                             Image = "rbxassetid://7734053426", 
-                            Time = 3 
+                            Time = 2 
                         }) 
-                        
-                        task.wait(1) 
-                        DoServerHop() 
+                        task.wait(0.3)
+                        DoServerHop()
                         break
-                    end 
+                    else
+                        -- Якщо яблук немає взагалі — теж одразу хопаємо
+                        if char and char:FindFirstChild("entered") and not _G.IsHopping then 
+                            OrionLib:MakeNotification({ 
+                                Name = "Slapple Farm", 
+                                Content = "Яблук немає. Шукаємо новий сервер...", 
+                                Image = "rbxassetid://7734053426", 
+                                Time = 2 
+                            }) 
+                            task.wait(0.3) 
+                            DoServerHop() 
+                            break
+                        end
+                    end
                     
-                    task.wait(0.8) 
+                    task.wait(0.5) 
                 end 
             end) 
         end 
@@ -383,15 +369,6 @@ Tab:AddToggle({
                 end 
             end) 
         end 
-    end 
-}) 
-
-Tab:AddToggle({ 
-    Name = "Server Hop (Якщо немає яблук)", 
-    Default = _G.ServerHopWhenEmpty, 
-    Callback = function(Value) 
-        _G.ServerHopWhenEmpty = Value 
-        SaveSettings() 
     end 
 }) 
 
