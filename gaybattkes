@@ -10,10 +10,10 @@ local ConfigFile = "SlappleFarm_Settings.json"
 local isInitializing = true 
 local noclipConnection = nil
 
--- Змінна-дозвіл на телепорт (для Server Hop)
 _G.AllowTeleport = false
+_G.IsHopping = false
 
--- 1. Anti-Teleport Hook (Захист від сторонніх ТП)
+-- 1. Anti-Teleport Hook (Без спаму сповіщеннями!)
 if hookmetamethod then
     local oldNamecall
     oldNamecall = hookmetamethod(game, "__namecall", newcclosure(function(self, ...)
@@ -21,14 +21,7 @@ if hookmetamethod then
         
         if self == TeleportService and (method:find("Teleport") or method == "TeleportToPlaceInstance" or method == "TeleportAsync") then
             if not _G.AllowTeleport then
-                pcall(function()
-                    OrionLib:MakeNotification({ 
-                        Name = "Anti-Teleport 🛡️", 
-                        Content = "Заблоковано сторонній телепорт!", 
-                        Image = "rbxassetid://7733658504", 
-                        Time = 3 
-                    })
-                end)
+                -- ПРИБРАНО СПОВІЩЕННЯ ЩОБ НЕ КРАШИТИ ГРУ ВІД СПАМУ
                 return nil
             end
         end
@@ -125,16 +118,6 @@ end
 
 local OrionLib = loadstring(game:HttpGet(("https://raw.githubusercontent.com/Giangplay/Script/main/Orion_Library_PE_V2.lua")))() 
 
-local Window = OrionLib:MakeWindow({ 
-    Name = "Slapple Collector Hub 👏",  
-    IntroText = "Instant Remote Farm + Fast Hop",  
-    IntroIcon = "rbxassetid://15315284749", 
-    HidePremium = false,  
-    SaveConfig = false,  
-    IntroEnabled = true,  
-    ConfigFolder = "SlappleFarmConfig" 
-}) 
-
 -- 7. Відстеження помилок телепортації 
 if not _G.TeleportHooked then 
     _G.TeleportHooked = true 
@@ -158,12 +141,13 @@ local function EnterArena()
         local lobby = workspace:FindFirstChild("Lobby")
         if lobby and lobby:FindFirstChild("Teleport1") then 
             firetouchinterest(char.Head, lobby.Teleport1, 0) 
+            task.wait(0.1) -- Невелика затримка між 0 і 1
             firetouchinterest(char.Head, lobby.Teleport1, 1) 
         end 
     end 
 end 
 
--- Пошук деталі підбору (TouchPart)
+-- Пошук деталі підбору
 local function GetSlappleTouchPart(slapple)
     if slapple:FindFirstChild("Glove") and slapple.Glove:IsA("BasePart") then
         return slapple.Glove
@@ -179,7 +163,7 @@ local function GetSlappleTouchPart(slapple)
     return nil
 end
 
--- 9. Повний збір ВСІХ яблук на сервері БЕЗ телепортації до них
+-- 9. Повний збір ВСІХ яблук
 local function CollectAllSlapplesRemote()
     local char = Players.LocalPlayer.Character
     local collectedCount = 0
@@ -197,16 +181,17 @@ local function CollectAllSlapplesRemote()
             local safeCFrame = islandCFrame * CFrame.new(0, -15, 0)
             safePlatform.CFrame = islandCFrame * CFrame.new(0, -17, 0)
 
-            -- Фіксуємося під землею лише 1 раз
+            -- Фіксуємося під землею
             if (hrp.Position - safeCFrame.Position).Magnitude > 5 then
                 pcall(function()
                     hrp.CFrame = safeCFrame
                     hrp.AssemblyLinearVelocity = Vector3.zero
                 end)
-                task.wait(0.2)
+                -- ВАЖЛИВО: Даємо серверу час зареєструвати нашу нову позицію!
+                task.wait(0.5) 
             end
 
-            -- Дистанційно лутаємо УСІ яблука підряд з платформи
+            -- Дистанційно лутаємо УСІ яблука
             for _, v in ipairs(items) do 
                 if not _G.SlappleFarm then break end
 
@@ -216,11 +201,11 @@ local function CollectAllSlapplesRemote()
                     if targetPart then
                         pcall(function()
                             firetouchinterest(hrp, targetPart, 0) 
-                            task.wait(0.01)
+                            task.wait(0.02)
                             firetouchinterest(hrp, targetPart, 1) 
                         end)
                         collectedCount = collectedCount + 1 
-                        task.wait(0.03) -- Затримка для стабільного зарахування
+                        task.wait(0.04) -- Затримка для стабільного зарахування
                     end
                 end 
             end
@@ -237,12 +222,14 @@ function DoServerHop()
 
     SaveSettings() 
 
-    OrionLib:MakeNotification({ 
-        Name = "Server Hop 🚀", 
-        Content = "Переходимо на новий сервер...", 
-        Image = "rbxassetid://7734053426", 
-        Time = 2 
-    }) 
+    pcall(function()
+        OrionLib:MakeNotification({ 
+            Name = "Server Hop 🚀", 
+            Content = "Переходимо на новий сервер...", 
+            Image = "rbxassetid://7734053426", 
+            Time = 2 
+        }) 
+    end)
 
     if _G.AutoExecute then 
         local q = queue_on_teleport or queueonteleport or (syn and syn.queue_on_teleport) or (fluxus and fluxus.queue_on_teleport) or (getgenv and (getgenv().queue_on_teleport or getgenv().queueonteleport))
@@ -316,32 +303,33 @@ Tab:AddToggle({
                     
                     if char and not char:FindFirstChild("entered") then 
                         EnterArena() 
-                        task.wait(0.8) 
+                        task.wait(1) -- Збільшено час очікування входу на арену
                     end 
 
                     if char and char:FindFirstChild("entered") then
-                        -- Збираємо абсолютно УСІ яблука на сервері за 1 прохід
                         local collectedCount = CollectAllSlapplesRemote()
 
-                        if collectedCount > 0 then
-                            OrionLib:MakeNotification({ 
-                                Name = "Slapple Farm 🍏", 
-                                Content = "Залутано усе! Зібрано: " .. tostring(collectedCount) .. " шт.! Перехід...", 
-                                Image = "rbxassetid://7734053426", 
-                                Time = 2 
-                            }) 
-                        else
-                            OrionLib:MakeNotification({ 
-                                Name = "Slapple Farm 🍏", 
-                                Content = "Яблук немає. Переходимо далі...", 
-                                Image = "rbxassetid://7734053426", 
-                                Time = 2 
-                            }) 
-                        end
+                        pcall(function()
+                            if collectedCount > 0 then
+                                OrionLib:MakeNotification({ 
+                                    Name = "Slapple Farm 🍏", 
+                                    Content = "Залутано усе! Зібрано: " .. tostring(collectedCount) .. " шт.! Перехід...", 
+                                    Image = "rbxassetid://7734053426", 
+                                    Time = 2 
+                                }) 
+                            else
+                                OrionLib:MakeNotification({ 
+                                    Name = "Slapple Farm 🍏", 
+                                    Content = "Яблук немає. Переходимо далі...", 
+                                    Image = "rbxassetid://7734053426", 
+                                    Time = 2 
+                                }) 
+                            end
+                        end)
 
-                        task.wait(0.3)
+                        task.wait(0.5)
                         DoServerHop()
-                        break -- Виходимо з циклу під час Server Hop
+                        break 
                     end
                     
                     task.wait(0.5) 
