@@ -3,6 +3,7 @@ if not game:IsLoaded() then game.Loaded:Wait() end
 local HttpService = game:GetService("HttpService") 
 local TeleportService = game:GetService("TeleportService") 
 local Players = game:GetService("Players") 
+local RunService = game:GetService("RunService")
 local VirtualUser = game:GetService("VirtualUser") -- Для Anti-AFK
 
 local GITHUB_RAW_URL = "https://raw.githubusercontent.com/markiyanbest/slap/refs/heads/main/gaybattkes"
@@ -15,7 +16,7 @@ local DoServerHop
 _G.AllowTeleport = false
 _G.IsHopping = false
 
--- 1. МЕГА-ХУК: Анти-Телепорт + Блокування Ремоутів Античіту
+-- 1. МЕГА-ХУК: Анти-Телепорт + Блокування Ремоутів Античіту + Anti-Brazil
 if hookmetamethod then
     local oldNamecall
     oldNamecall = hookmetamethod(game, "__namecall", newcclosure(function(self, ...)
@@ -28,10 +29,15 @@ if hookmetamethod then
             end
         end
 
-        -- БЛОКУВАННЯ АНТИЧІТУ SLAP BATTLES
+        -- БЛОКУВАННЯ АНТИЧІТУ SLAP BATTLES ТА ПОРТАЛУ БРАЗИЛІЇ
         if method == "FireServer" or method == "InvokeServer" then
+            -- Античіт
             if self.Name == "Kicker" or self.Name == "Ban" or self.Name == "LogTunnel" or self.Name == "ModerationRemote" then
                 return nil 
+            end
+            -- Перчатки, що кидають у Бразилію (Wormhole / Adios)
+            if self.Name == "WormholePlace" or self.Name == "AdiosActivated" then
+                return nil
             end
         end
 
@@ -94,11 +100,12 @@ end
 
 LoadSettings() 
 
--- 6. Блокування порталу Бразилії
+-- 6. Блокування порталу Бразилії (Розширено)
 local function DisableBrazilPortal()
+    -- Шукаємо портал у лобі
     local lobby = workspace:FindFirstChild("Lobby")
     if lobby then
-        local brazil = lobby:FindFirstChild("brazil")
+        local brazil = lobby:FindFirstChild("brazil") or lobby:FindFirstChild("Brazil")
         if brazil then
             for _, v in pairs(brazil:GetDescendants()) do
                 if v:IsA("BasePart") and v.CanTouch then
@@ -107,11 +114,50 @@ local function DisableBrazilPortal()
             end
         end
     end
+    
+    -- Шукаємо портал прямо в Workspace (іноді він там)
+    local wsBrazil = workspace:FindFirstChild("brazil") or workspace:FindFirstChild("Brazil")
+    if wsBrazil then
+        for _, v in pairs(wsBrazil:GetDescendants()) do
+            if v:IsA("BasePart") and v.CanTouch then
+                v.CanTouch = false
+            end
+        end
+    end
+end
+
+-- 7. Anti-Brazil Escape (Якщо раптом потрапив туди — миттєво телепортує назад)
+local antiBrazilConnection
+local function StartAntiBrazilEscape()
+    if antiBrazilConnection then antiBrazilConnection:Disconnect() end
+    antiBrazilConnection = RunService.Heartbeat:Connect(function()
+        local char = Players.LocalPlayer.Character
+        if char and char:FindFirstChild("HumanoidRootPart") then
+            local hrp = char.HumanoidRootPart
+            -- Якщо нас кинуло у вимір Бразилії (Z координата дуже мала або специфічна позиція)
+            -- У Slap Battles Бразилія знаходиться дуже далеко (часто понизу або в окремій зоні)
+            if hrp.Position.Y < -100 or hrp.Position.X < -1000 or hrp.Position.Z < -1000 then
+                local arena = workspace:FindFirstChild("Arena")
+                if arena and arena:FindFirstChild("island5") then
+                    local islandCFrame = arena.island5:IsA("Model") and arena.island5:GetPivot() or arena.island5.CFrame
+                    -- Кидаємо під острів
+                    hrp.CFrame = islandCFrame * CFrame.new(0, -15, 0)
+                    hrp.AssemblyLinearVelocity = Vector3.zero
+                else
+                    -- Якщо арени немає, кидаємо в лобі
+                    local lobby = workspace:FindFirstChild("Lobby")
+                    if lobby then
+                        hrp.CFrame = lobby:GetPivot() * CFrame.new(0, 10, 0)
+                    end
+                end
+            end
+        end
+    end)
 end
 
 local OrionLib = loadstring(game:HttpGet(("https://raw.githubusercontent.com/Giangplay/Script/main/Orion_Library_PE_V2.lua")))() 
 
--- 7. Відстеження помилок телепортації 
+-- 8. Відстеження помилок телепортації 
 if not _G.TeleportHooked then 
     _G.TeleportHooked = true 
     TeleportService.TeleportInitFailed:Connect(function(player, teleportResult, errorMessage) 
@@ -126,7 +172,7 @@ if not _G.TeleportHooked then
     end) 
 end 
 
--- 8. Вхід на арену 
+-- 9. Вхід на арену 
 local function EnterArena() 
     DisableBrazilPortal()
     local char = Players.LocalPlayer.Character 
@@ -156,7 +202,7 @@ local function GetSlappleTouchPart(slapple)
     return nil
 end
 
--- 9. ЗБІР БЕЗ ТЕЛЕПОРТУ ДО ЯБЛУК (Тільки firetouchinterest з платформи під островом)
+-- 10. ЗБІР БЕЗ ТЕЛЕПОРТУ ДО ЯБЛУК 
 local function CollectAllSlapplesRemote()
     local char = Players.LocalPlayer.Character
     local collectedCount = 0
@@ -170,19 +216,16 @@ local function CollectAllSlapplesRemote()
             local slappleContainer = island.Slapples
             local items = slappleContainer:GetChildren()
 
-            -- Оновлюємо платформу під островом
             local islandCFrame = island:IsA("Model") and island:GetPivot() or island.CFrame
             local safeCFrame = islandCFrame * CFrame.new(0, -15, 0)
             safePlatform.CFrame = islandCFrame * CFrame.new(0, -17, 0)
 
-            -- Телепортуємось під острів ОДИН РАЗ. Без заморожування, щоб фізика .Touched працювала.
             pcall(function()
                 hrp.CFrame = safeCFrame
                 hrp.AssemblyLinearVelocity = Vector3.zero
             end)
             task.wait(0.5) 
 
-            -- Збираємо всі яблука з цієї точки через firetouchinterest
             for _, v in ipairs(items) do 
                 if not _G.SlappleFarm then break end
 
@@ -205,7 +248,7 @@ local function CollectAllSlapplesRemote()
     return collectedCount
 end
 
--- 10. Server Hop
+-- 11. Server Hop
 DoServerHop = function() 
     if _G.IsHopping then return end 
     _G.IsHopping = true 
@@ -275,10 +318,10 @@ DoServerHop = function()
     end)
 end 
 
--- 11. Інтерфейс
+-- 12. Інтерфейс
 local Window = OrionLib:MakeWindow({ 
     Name = "Slapple Collector Hub 👏",  
-    IntroText = "Remote Farm (No TP to apples)",  
+    IntroText = "Remote Farm + Anti-Brazil",  
     IntroIcon = "rbxassetid://15315284749", 
     HidePremium = false,  
     SaveConfig = false,  
@@ -300,8 +343,10 @@ Tab:AddToggle({
         SaveSettings() 
 
         if Value then 
+            StartAntiBrazilEscape() -- Вмикаємо захист від Бразилії
             task.spawn(function() 
                 while _G.SlappleFarm do 
+                    DisableBrazilPortal() -- Постійно вимикаємо портал
                     local char = Players.LocalPlayer.Character 
                     
                     if char and not char:FindFirstChild("isInArena") then 
@@ -338,6 +383,11 @@ Tab:AddToggle({
                     task.wait(0.5) 
                 end 
             end) 
+        else
+            if antiBrazilConnection then
+                antiBrazilConnection:Disconnect()
+                antiBrazilConnection = nil
+            end
         end 
     end 
 }) 
@@ -383,7 +433,8 @@ local BypassTab = Window:MakeTab({
 }) 
 
 BypassTab:AddLabel("Anti-Cheat Bypass: ✅ ACTIVE")
-BypassTab:AddParagraph("Блокування ремоутів", "Скрипт автоматично блокує Kicker, Ban, LogTunnel та ModerationRemote.")
+BypassTab:AddParagraph("Блокування ремоутів", "Блокує Kicker, Ban, LogTunnel, ModerationRemote.")
+BypassTab:AddParagraph("Anti-Brazil 🇧🇷", "Блокує телепорт у Бразилію (Wormhole/Adios) та автоматично витягує вас, якщо ви туди потрапили.")
 
 BypassTab:AddLabel("Anti-AFK: ✅ ACTIVE")
 BypassTab:AddParagraph("Блокування AFK", "Вас не кікне за бездіяльність через 20 хвилин.")
