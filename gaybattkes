@@ -1,66 +1,53 @@
-if not game:IsLoaded() then game.Loaded:Wait() end
+if not game:IsLoaded() then game.Loaded:Wait() end 
 
-local HttpService = game:GetService("HttpService")
-local TeleportService = game:GetService("TeleportService")
-local Players = game:GetService("Players")
+local HttpService = game:GetService("HttpService") 
+local TeleportService = game:GetService("TeleportService") 
+local Players = game:GetService("Players") 
 
--- 📌 ВКАЖИ СВОЄ RAW ПОСИЛАННЯ З GITHUB ТУТ:
-local GITHUB_RAW_URL = "https://raw.githubusercontent.com/ТВІЙ_НІК/ТВІЙ_РЕПО/main/script.lua"
+-- Твоє пряме посилання з GitHub:
+local GITHUB_RAW_URL = "https://raw.githubusercontent.com/markiyanbest/slap/refs/heads/main/gaybattkes"
 
-local ConfigFile = "SlappleFarm_Settings.json"
+local ConfigFile = "SlappleFarm_Settings.json" 
+local isInitializing = true -- Захист від затирання конфігу під час створення UI
 
-_G.AllowScriptHop = false
+-- 1. Завантаження налаштувань з файлу 
+local function LoadSettings() 
+    if isfile and readfile and isfile(ConfigFile) then 
+        local success, result = pcall(function() 
+            return HttpService:JSONDecode(readfile(ConfigFile)) 
+        end) 
+        if success and type(result) == "table" then 
+            _G.SlappleFarm = result.SlappleFarm or false 
+            _G.AutoEnterArena = result.AutoEnterArena or false 
+            _G.ServerHopWhenEmpty = result.ServerHopWhenEmpty or false 
+            _G.AutoExecute = (result.AutoExecute ~= nil) and result.AutoExecute or true 
+            return 
+        end 
+    end 
+    _G.SlappleFarm = false 
+    _G.AutoEnterArena = false 
+    _G.ServerHopWhenEmpty = false 
+    _G.AutoExecute = true 
+end 
 
--- 1. Блокування чужих телепортів (Бразилія тощо)
-if hookmetamethod and not _G.TeleportBlockedHook then
-    _G.TeleportBlockedHook = true
-    local oldNamecall
-    oldNamecall = hookmetamethod(game, "__namecall", newcclosure(function(self, ...)
-        local method = getnamecallmethod()
-        if self == TeleportService and (method == "Teleport" or method == "TeleportToPlaceInstance" or method == "TeleportAsync") then
-            if not _G.AllowScriptHop then
-                return nil
-            end
-        end
-        return oldNamecall(self, ...)
-    end))
-end
+-- 2. Безпечне збереження налаштувань
+local function SaveSettings() 
+    if isInitializing then return end -- Ігноруємо авто-виклики при ініціалізації UI
+    if writefile then 
+        pcall(function() 
+            writefile(ConfigFile, HttpService:JSONEncode({ 
+                SlappleFarm = _G.SlappleFarm, 
+                AutoEnterArena = _G.AutoEnterArena, 
+                ServerHopWhenEmpty = _G.ServerHopWhenEmpty, 
+                AutoExecute = _G.AutoExecute 
+            })) 
+        end) 
+    end 
+end 
 
--- Ініціалізація змінних
-if _G.SlappleFarm == nil then _G.SlappleFarm = false end
-if _G.AutoEnterArena == nil then _G.AutoEnterArena = false end
-if _G.ServerHopWhenEmpty == nil then _G.ServerHopWhenEmpty = false end
+LoadSettings() 
 
--- 2. Завантаження налаштувань з файлу
-local function LoadSettings()
-    if isfile and readfile and isfile(ConfigFile) then
-        local success, result = pcall(function()
-            return HttpService:JSONDecode(readfile(ConfigFile))
-        end)
-        if success and type(result) == "table" then
-            _G.SlappleFarm = result.SlappleFarm or false
-            _G.AutoEnterArena = result.AutoEnterArena or false
-            _G.ServerHopWhenEmpty = result.ServerHopWhenEmpty or false
-        end
-    end
-end
-
--- 3. Збереження налаштувань у файл
-local function SaveSettings()
-    if writefile then
-        pcall(function()
-            writefile(ConfigFile, HttpService:JSONEncode({
-                SlappleFarm = _G.SlappleFarm,
-                AutoEnterArena = _G.AutoEnterArena,
-                ServerHopWhenEmpty = _G.ServerHopWhenEmpty
-            }))
-        end)
-    end
-end
-
-LoadSettings()
-
--- 4. Вимкнення деталі Бразилії
+-- 3. Захист від порталу Бразилії
 local function DisableBrazilPortal()
     local lobby = workspace:FindFirstChild("Lobby")
     if lobby then
@@ -75,226 +62,214 @@ local function DisableBrazilPortal()
     end
 end
 
--- 5. Стабільний Server Hop із захищеним Auto-Execute
-function DoServerHop()
-    if _G.IsHopping then return end
-    _G.IsHopping = true
+local OrionLib = loadstring(game:HttpGet(("https://raw.githubusercontent.com/Giangplay/Script/main/Orion_Library_PE_V2.lua")))() 
 
-    SaveSettings()
-    _G.AllowScriptHop = true
+local Window = OrionLib:MakeWindow({ 
+    Name = "Slapple Collector Hub 👏",  
+    IntroText = "Slapple Farm Ready",  
+    IntroIcon = "rbxassetid://15315284749", 
+    HidePremium = false,  
+    SaveConfig = false,  
+    IntroEnabled = true,  
+    ConfigFolder = "SlappleFarmConfig" 
+}) 
 
-    -- Передаємо надійний лоадер у чергу нового сервера
-    local queue_teleport = queue_on_teleport or queueonteleport or (syn and syn.queue_on_teleport) or (fluxus and fluxus.queue_on_teleport)
-    if queue_teleport and GITHUB_RAW_URL ~= "https://raw.githubusercontent.com/ТВІЙ_НІК/ТВІЙ_РЕПО/main/script.lua" then
-        pcall(function()
-            queue_teleport([[
-                task.spawn(function()
-                    repeat task.wait(0.5) until game:IsLoaded()
-                    repeat task.wait(0.5) until game.Players and game.Players.LocalPlayer and game.Players.LocalPlayer.Character
-                    task.wait(2)
-                    
-                    local url = "]] .. GITHUB_RAW_URL .. [[?v=" .. tostring(tick())
-                    for i = 1, 5 do
-                        local success, err = pcall(function()
-                            loadstring(game:HttpGet(url))()
-                        end)
-                        if success then break end
-                        task.wait(2)
-                    end
-                end)
-            ]])
-        end)
-    end
+-- 4. Відстеження помилок телепортації 
+if not _G.TeleportHooked then 
+    _G.TeleportHooked = true 
+    TeleportService.TeleportInitFailed:Connect(function(player, teleportResult, errorMessage) 
+        if player == Players.LocalPlayer then 
+            _G.IsHopping = false 
+            OrionLib:MakeNotification({ 
+                Name = "Помилка Телепорту", 
+                Content = "Повторна спроба...", 
+                Image = "rbxassetid://7733658504", 
+                Time = 3 
+            }) 
+            task.wait(2) 
+            if _G.ServerHopWhenEmpty or _G.SlappleFarm then 
+                DoServerHop() 
+            end 
+        end 
+    end) 
+end 
 
-    local placeId = game.PlaceId
-    local jobId = game.JobId
-    local targetServerId = nil
-
-    local success, response = pcall(function()
-        return game:HttpGet("https://games.roblox.com/v1/games/" .. tostring(placeId) .. "/servers/Public?sortOrder=Asc&limit=100")
-    end)
-
-    if success and response then
-        local decodeSuccess, decoded = pcall(function() return HttpService:JSONDecode(response) end)
-        if decodeSuccess and decoded and decoded.data then
-            local validServers = {}
-            for _, server in ipairs(decoded.data) do
-                if type(server) == "table" and server.playing and server.maxPlayers and server.playing < server.maxPlayers and server.id ~= jobId then
-                    table.insert(validServers, server.id)
-                end
-            end
-            if #validServers > 0 then
-                targetServerId = validServers[math.random(1, #validServers)]
-            end
-        end
-    end
-
-    if targetServerId then
-        local tpSuccess = pcall(function()
-            TeleportService:TeleportToPlaceInstance(placeId, targetServerId, Players.LocalPlayer)
-        end)
-        if not tpSuccess then
-            pcall(function() TeleportService:Teleport(placeId, Players.LocalPlayer) end)
-        end
-    else
-        pcall(function() TeleportService:Teleport(placeId, Players.LocalPlayer) end)
-    end
-
-    task.wait(6)
-    _G.AllowScriptHop = false
-    _G.IsHopping = false
-end
-
--- 6. Перехоплення помилок телепорту
-if not _G.TeleportHooked then
-    _G.TeleportHooked = true
-    TeleportService.TeleportInitFailed:Connect(function(player, teleportResult, errorMessage)
-        if player == Players.LocalPlayer then
-            _G.IsHopping = false
-            _G.AllowScriptHop = false
-            task.wait(2)
-            if _G.ServerHopWhenEmpty or _G.SlappleFarm then
-                DoServerHop()
-            end
-        end
-    end)
-end
-
--- 7. Вхід на арену
-local function EnterArena()
+-- 5. Функція входу на арену 
+local function EnterArena() 
     DisableBrazilPortal()
-    
-    local char = Players.LocalPlayer.Character
-    if char and char:FindFirstChild("Head") and not char:FindFirstChild("entered") then
+    local char = Players.LocalPlayer.Character 
+    if char and char:FindFirstChild("Head") and not char:FindFirstChild("entered") then 
         local lobby = workspace:FindFirstChild("Lobby")
-        if lobby then
-            local tp = lobby:FindFirstChild("Teleport1")
-            if tp then
-                firetouchinterest(char.Head, tp, 0)
-                firetouchinterest(char.Head, tp, 1)
-            end
-        end
-    end
-end
+        if lobby and lobby:FindFirstChild("Teleport1") then 
+            firetouchinterest(char.Head, lobby.Teleport1, 0) 
+            firetouchinterest(char.Head, lobby.Teleport1, 1) 
+        end 
+    end 
+end 
 
--- 8. Збір слеплів
-local function CollectSlapples()
-    local char = Players.LocalPlayer.Character
-    local collectedInLoop = 0
-    if char and char:FindFirstChild("HumanoidRootPart") and char:FindFirstChild("entered") then
-        local arena = workspace:FindFirstChild("Arena")
-        if arena then
-            local island5 = arena:FindFirstChild("island5")
-            if island5 then
-                local slapples = island5:FindFirstChild("Slapples")
-                if slapples then
-                    for _, v in pairs(slapples:GetChildren()) do
-                        if (v.Name == "Slapple" or v.Name == "GoldenSlapple") and v:FindFirstChild("Glove") and v.Glove:FindFirstChildWhichIsA("TouchTransmitter") then
-                            collectedInLoop = collectedInLoop + 1
-                            firetouchinterest(char.HumanoidRootPart, v.Glove, 0)
-                            firetouchinterest(char.HumanoidRootPart, v.Glove, 1)
-                            task.wait(0.05)
-                        end
-                    end
-                end
-            end
-        end
-    end
-    return collectedInLoop
-end
+-- 6. Надійний Server Hop із викликом твого GitHub
+function DoServerHop() 
+    if _G.IsHopping then return end 
+    _G.IsHopping = true 
 
-task.spawn(function()
-    while true do
-        DisableBrazilPortal()
-        task.wait(3)
-    end
-end)
+    SaveSettings() 
 
--- 9. Завантаження UI
-local OrionLib = loadstring(game:HttpGet(("https://raw.githubusercontent.com/Giangplay/Script/main/Orion_Library_PE_V2.lua")))()
-local Window = OrionLib:MakeWindow({
-    Name = "Stable Auto-Hop Slapple Farm 👏", 
-    IntroText = "Slapple Farm Active", 
-    IntroIcon = "rbxassetid://15315284749",
-    HidePremium = false, 
-    SaveConfig = false, 
-    IntroEnabled = true, 
-    ConfigFolder = "SlappleFarmConfig"
-})
+    OrionLib:MakeNotification({ 
+        Name = "Server Hop", 
+        Content = "Шукаємо новий сервер...", 
+        Image = "rbxassetid://7734053426", 
+        Time = 3 
+    }) 
 
-local Tab = Window:MakeTab({
-    Name = "Slapples Farm",
-    Icon = "rbxassetid://7733673987",
-    PremiumOnly = false
-})
+    -- Авто-екзекют під час хопу з обходом кешу GitHub (?v=tick())
+    if _G.AutoExecute then 
+        local q = queue_on_teleport or queueonteleport or (syn and syn.queue_on_teleport) or (fluxus and fluxus.queue_on_teleport) or (getgenv and (getgenv().queue_on_teleport or getgenv().queueonteleport))
+        
+        if q then 
+            pcall(function() 
+                q('repeat task.wait() until game:IsLoaded(); loadstring(game:HttpGet("' .. GITHUB_RAW_URL .. '?v=' .. tostring(tick()) .. '"))()')
+            end) 
+        end 
+    end 
 
-Tab:AddToggle({
-    Name = "Autofarm Slapples",
-    Default = _G.SlappleFarm,
-    Callback = function(Value)
-        _G.SlappleFarm = Value
-        SaveSettings()
+    local placeId = game.PlaceId 
+    local jobId = game.JobId 
+    local targetServerId = nil 
 
-        if Value then
-            task.spawn(function()
-                while _G.SlappleFarm do
-                    local char = Players.LocalPlayer.Character
+    local success, response = pcall(function() 
+        return game:HttpGet("https://games.roblox.com/v1/games/" .. tostring(placeId) .. "/servers/Public?sortOrder=Asc&limit=100") 
+    end) 
+
+    if success and response then 
+        local decodeSuccess, decoded = pcall(function() return HttpService:JSONDecode(response) end) 
+        if decodeSuccess and decoded and decoded.data then 
+            local validServers = {} 
+            for _, server in ipairs(decoded.data) do 
+                if type(server) == "table" and server.playing and server.maxPlayers and server.playing < server.maxPlayers and server.id ~= jobId then 
+                    table.insert(validServers, server.id) 
+                end 
+            end 
+            if #validServers > 0 then 
+                targetServerId = validServers[math.random(1, #validServers)] 
+            end 
+        end 
+    end 
+
+    if targetServerId then 
+        local tpSuccess = pcall(function() 
+            TeleportService:TeleportToPlaceInstance(placeId, targetServerId, Players.LocalPlayer) 
+        end) 
+        if not tpSuccess then 
+            TeleportService:Teleport(placeId, Players.LocalPlayer) 
+        end 
+    else 
+        TeleportService:Teleport(placeId, Players.LocalPlayer) 
+    end 
+
+    task.delay(7, function()
+        _G.IsHopping = false 
+    end)
+end 
+
+-- 7. Вкладки та UI
+local Tab = Window:MakeTab({ 
+    Name = "Slapples Farm", 
+    Icon = "rbxassetid://7733673987", 
+    PremiumOnly = false 
+}) 
+
+Tab:AddToggle({ 
+    Name = "Autofarm Slapples", 
+    Default = _G.SlappleFarm, 
+    Callback = function(Value) 
+        _G.SlappleFarm = Value 
+        SaveSettings() 
+
+        if Value then 
+            task.spawn(function() 
+                while _G.SlappleFarm do 
+                    local char = Players.LocalPlayer.Character 
                     
-                    if char and not char:FindFirstChild("entered") then
-                        EnterArena()
-                        task.wait(1)
-                    end
+                    if char and not char:FindFirstChild("entered") then 
+                        EnterArena() 
+                        task.wait(1) 
+                    end 
 
-                    local collected = CollectSlapples()
+                    local collectedInLoop = 0 
+                    if char and char:FindFirstChild("HumanoidRootPart") and char:FindFirstChild("entered") then 
+                        local arena = workspace:FindFirstChild("Arena")
+                        if arena and arena:FindFirstChild("island5") and arena.island5:FindFirstChild("Slapples") then 
+                            for _, v in pairs(arena.island5.Slapples:GetChildren()) do 
+                                if (v.Name == "Slapple" or v.Name == "GoldenSlapple") and v:FindFirstChild("Glove") and v.Glove:FindFirstChildWhichIsA("TouchTransmitter") then 
+                                    collectedInLoop = collectedInLoop + 1 
+                                    firetouchinterest(char.HumanoidRootPart, v.Glove, 0) 
+                                    firetouchinterest(char.HumanoidRootPart, v.Glove, 1) 
+                                    task.wait(0.05) 
+                                end 
+                            end 
+                        end 
+                    end 
 
-                    if _G.ServerHopWhenEmpty and collected == 0 and char and char:FindFirstChild("entered") and not _G.IsHopping then
-                        OrionLib:MakeNotification({
-                            Name = "Slapple Farm",
-                            Content = "Дерево порожнє! Телепортуємось...",
-                            Image = "rbxassetid://7734053426",
-                            Time = 3
-                        })
-                        DoServerHop()
-                        task.wait(5)
-                    end
+                    if _G.ServerHopWhenEmpty and collectedInLoop == 0 and char and char:FindFirstChild("entered") and not _G.IsHopping then 
+                        OrionLib:MakeNotification({ 
+                            Name = "Slapple Farm", 
+                            Content = "Дерево порожнє! Телепортуємось...", 
+                            Image = "rbxassetid://7734053426", 
+                            Time = 3 
+                        }) 
+                        DoServerHop() 
+                        task.wait(5) 
+                    end 
                     
-                    task.wait(0.5)
-                end
-            end)
-        end
-    end
-})
+                    task.wait(0.5) 
+                end 
+            end) 
+        end 
+    end 
+}) 
 
-Tab:AddToggle({
-    Name = "Auto Enter Arena (Авто-вхід)",
-    Default = _G.AutoEnterArena,
-    Callback = function(Value)
-        _G.AutoEnterArena = Value
-        SaveSettings()
+Tab:AddToggle({ 
+    Name = "Auto Enter Arena (Авто-вхід)", 
+    Default = _G.AutoEnterArena, 
+    Callback = function(Value) 
+        _G.AutoEnterArena = Value 
+        SaveSettings() 
 
-        if Value then
-            task.spawn(function()
-                while _G.AutoEnterArena do
-                    EnterArena()
-                    task.wait(0.5)
-                end
-            end)
-        end
-    end
-})
+        if Value then 
+            task.spawn(function() 
+                while _G.AutoEnterArena do 
+                    EnterArena() 
+                    task.wait(0.5) 
+                end 
+            end) 
+        end 
+    end 
+}) 
 
-Tab:AddToggle({
-    Name = "Server Hop (Коли все зібрано)",
-    Default = _G.ServerHopWhenEmpty,
-    Callback = function(Value)
-        _G.ServerHopWhenEmpty = Value
-        SaveSettings()
-    end
-})
+Tab:AddToggle({ 
+    Name = "Server Hop (Коли все зібрано)", 
+    Default = _G.ServerHopWhenEmpty, 
+    Callback = function(Value) 
+        _G.ServerHopWhenEmpty = Value 
+        SaveSettings() 
+    end 
+}) 
 
-Tab:AddButton({
-    Name = "Ручний Server Hop",
-    Callback = function()
-        DoServerHop()
-    end
-})
+Tab:AddToggle({ 
+    Name = "Auto-Execute (Збереження у файл)", 
+    Default = _G.AutoExecute, 
+    Callback = function(Value) 
+        _G.AutoExecute = Value 
+        SaveSettings() 
+    end 
+}) 
+
+Tab:AddButton({ 
+    Name = "Ручний Server Hop", 
+    Callback = function() 
+        DoServerHop() 
+    end 
+}) 
+
+-- Дозволяємо збереження файлу (UI сформовано)
+isInitializing = false
