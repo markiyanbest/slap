@@ -4,14 +4,39 @@ local HttpService = game:GetService("HttpService")
 local TeleportService = game:GetService("TeleportService")
 local Players = game:GetService("Players")
 
+-- 📌 ВКАЖИ СВОЄ RAW ПОСИЛАННЯ З GITHUB ТУТ:
+local GITHUB_RAW_URL = "https://raw.githubusercontent.com/ТВІЙ_НІК/ТВІЙ_РЕПО/main/script.lua"
+
 local ConfigFile = "SlappleFarm_Settings.json"
+
+-- Змінна-дозвіл на телепорт (за замовчуванням заблоковано)
+_G.AllowScriptHop = false
+
+-- 🛡️ 1. БЛОКУВАННЯ БУДЬ-ЯКИХ ТЕЛЕПОРТІВ ГРИ (БРАЗИЛІЯ ТОЩО)
+if hookmetamethod and not _G.TeleportBlockedHook then
+    _G.TeleportBlockedHook = true
+    local oldNamecall
+    oldNamecall = hookmetamethod(game, "__namecall", newcclosure(function(self, ...)
+        local method = getnamecallmethod()
+        
+        -- Якщо гра намагається викликати будь-який метод телепорту
+        if self == TeleportService and (method == "Teleport" or method == "TeleportToPlaceInstance" or method == "TeleportAsync") then
+            if not _G.AllowScriptHop then
+                -- Блокуємо телепорт від гри
+                return nil
+            end
+        end
+        
+        return oldNamecall(self, ...)
+    end))
+end
 
 -- Ініціалізація глобальних змінних
 if _G.SlappleFarm == nil then _G.SlappleFarm = false end
 if _G.AutoEnterArena == nil then _G.AutoEnterArena = false end
 if _G.ServerHopWhenEmpty == nil then _G.ServerHopWhenEmpty = false end
 
--- 1. Завантаження налаштувань
+-- 2. Завантаження конфігурації
 local function LoadSettings()
     if isfile and readfile and isfile(ConfigFile) then
         local success, result = pcall(function()
@@ -25,7 +50,7 @@ local function LoadSettings()
     end
 end
 
--- 2. Збереження налаштувань
+-- 3. Збереження конфігурації
 local function SaveSettings()
     if writefile then
         pcall(function()
@@ -40,12 +65,41 @@ end
 
 LoadSettings()
 
--- 3. Спочатку оголошуємо Server Hop (щоб не було помилки Unknown global)
+-- 4. Додаткове вимкнення деталі Бразилії
+local function DisableBrazilPortal()
+    local lobby = workspace:FindFirstChild("Lobby")
+    if lobby then
+        local brazil = lobby:FindFirstChild("brazil")
+        if brazil then
+            for _, v in pairs(brazil:GetDescendants()) do
+                if v:IsA("BasePart") and v.CanTouch then
+                    v.CanTouch = false
+                end
+            end
+        end
+    end
+end
+
+-- 5. Контрольований Server Hop
 function DoServerHop()
     if _G.IsHopping then return end
     _G.IsHopping = true
 
     SaveSettings()
+
+    -- 🔓 ТИМЧАСОВО ДОЗВОЛЯЄМО ТЕЛЕПОРТ ДЛЯ НАШОГО С КРИПТА
+    _G.AllowScriptHop = true
+
+    -- Авто-екзекют для нового сервера
+    local queue_teleport = queue_on_teleport or queueonteleport or (syn and syn.queue_on_teleport) or (fluxus and fluxus.queue_on_teleport)
+    if queue_teleport and GITHUB_RAW_URL ~= "https://raw.githubusercontent.com/ТВІЙ_НІК/ТВІЙ_РЕПО/main/script.lua" then
+        pcall(function()
+            queue_teleport([[
+                repeat task.wait() until game:IsLoaded() and game.Players.LocalPlayer
+                loadstring(game:HttpGet("]] .. GITHUB_RAW_URL .. [[?v=]] .. tostring(tick()) .. [["))()
+            ]])
+        end)
+    end
 
     local placeId = game.PlaceId
     local jobId = game.JobId
@@ -82,15 +136,17 @@ function DoServerHop()
     end
 
     task.wait(6)
+    _G.AllowScriptHop = false
     _G.IsHopping = false
 end
 
--- 4. Перехоплення помилок телепорту
+-- 6. Перехоплення помилок телепорту
 if not _G.TeleportHooked then
     _G.TeleportHooked = true
     TeleportService.TeleportInitFailed:Connect(function(player, teleportResult, errorMessage)
         if player == Players.LocalPlayer then
             _G.IsHopping = false
+            _G.AllowScriptHop = false
             task.wait(2)
             if _G.ServerHopWhenEmpty or _G.SlappleFarm then
                 DoServerHop()
@@ -99,8 +155,10 @@ if not _G.TeleportHooked then
     end)
 end
 
--- 5. Безпечний вхід на арену (захист від відсутності Lobby)
+-- 7. Безпечний вхід на арену
 local function EnterArena()
+    DisableBrazilPortal()
+    
     local char = Players.LocalPlayer.Character
     if char and char:FindFirstChild("Head") and not char:FindFirstChild("entered") then
         local lobby = workspace:FindFirstChild("Lobby")
@@ -114,7 +172,7 @@ local function EnterArena()
     end
 end
 
--- 6. Безпечний збір слеплів (захист від відсутності Arena/Slapples)
+-- 8. Безпечний збір слеплів
 local function CollectSlapples()
     local char = Players.LocalPlayer.Character
     local collectedInLoop = 0
@@ -140,11 +198,19 @@ local function CollectSlapples()
     return collectedInLoop
 end
 
--- 7. Завантаження UI Orion
+-- Фонова перевірка
+task.spawn(function()
+    while true do
+        DisableBrazilPortal()
+        task.wait(3)
+    end
+end)
+
+-- 9. Завантаження UI Orion
 local OrionLib = loadstring(game:HttpGet(("https://raw.githubusercontent.com/Giangplay/Script/main/Orion_Library_PE_V2.lua")))()
 local Window = OrionLib:MakeWindow({
-    Name = "Fixed Slapple Farm 👏", 
-    IntroText = "Clean & Safe Farm", 
+    Name = "Anti-Portal Slapple Farm 👏", 
+    IntroText = "Teleports Protected", 
     IntroIcon = "rbxassetid://15315284749",
     HidePremium = false, 
     SaveConfig = false, 
