@@ -10,16 +10,15 @@ local ConfigFile = "SlappleFarm_Settings.json"
 local isInitializing = true 
 local noclipConnection = nil
 
--- Змінна-дозвіл на телепорт (працює тільки під час Server Hop від нашого скрипта)
+-- Змінна-дозвіл на телепорт
 _G.AllowTeleport = false
 
--- 1. Anti-Teleport Hook (Блокування всіх сторонніх телепортів у грі)
+-- 1. Anti-Teleport Hook
 if hookmetamethod then
     local oldNamecall
     oldNamecall = hookmetamethod(game, "__namecall", newcclosure(function(self, ...)
         local method = getnamecallmethod()
         
-        -- Перехоплюємо всі методи TeleportService
         if self == TeleportService and (method:find("Teleport") or method == "TeleportToPlaceInstance" or method == "TeleportAsync") then
             if not _G.AllowTeleport then
                 pcall(function()
@@ -30,7 +29,7 @@ if hookmetamethod then
                         Time = 3 
                     })
                 end)
-                return nil -- Скасовуємо виклик телепорту
+                return nil
             end
         end
         return oldNamecall(self, ...)
@@ -109,7 +108,7 @@ local function SetNoclip(state)
     end
 end
 
--- 6. Захист від порталу Бразилії (додатковий тригер-блокер)
+-- 6. Захист від порталу Бразилії
 local function DisableBrazilPortal()
     local lobby = workspace:FindFirstChild("Lobby")
     if lobby then
@@ -164,7 +163,23 @@ local function EnterArena()
     end 
 end 
 
--- 9. Збір під землею з мікро-телепортом
+-- Універсальна функція знаходження деталі для торкання
+local function GetSlappleTouchPart(slapple)
+    if slapple:FindFirstChild("Glove") and slapple.Glove:IsA("BasePart") then
+        return slapple.Glove
+    elseif slapple:IsA("BasePart") then
+        return slapple
+    else
+        for _, child in ipairs(slapple:GetChildren()) do
+            if child:IsA("BasePart") then
+                return child
+            end
+        end
+    end
+    return nil
+end
+
+-- 9. Покращений збір під землею
 local function CollectSlapplesUnderground()
     local char = Players.LocalPlayer.Character
     local collectedInLoop = 0
@@ -178,8 +193,10 @@ local function CollectSlapplesUnderground()
             local slappleContainer = island.Slapples
             local items = slappleContainer:GetChildren()
 
-            local safeCFrame = island.CFrame * CFrame.new(0, -7, 0)
-            safePlatform.CFrame = island.CFrame * CFrame.new(0, -9, 0)
+            -- Безпечне отримання CFrame (підтримка як Part, так і Model)
+            local islandCFrame = island:IsA("Model") and island:GetPivot() or island.CFrame
+            local safeCFrame = islandCFrame * CFrame.new(0, -12, 0)
+            safePlatform.CFrame = islandCFrame * CFrame.new(0, -14, 0)
 
             pcall(function()
                 hrp.CFrame = safeCFrame
@@ -189,23 +206,40 @@ local function CollectSlapplesUnderground()
 
             if #items > 0 then
                 for _, v in pairs(items) do 
-                    if _G.SlappleFarm and (v.Name == "Slapple" or v.Name == "GoldenSlapple") and v:FindFirstChild("Glove") and v.Glove:FindFirstChildWhichIsA("TouchTransmitter") then 
-                        collectedInLoop = collectedInLoop + 1 
+                    if not _G.SlappleFarm then break end
 
-                        pcall(function()
-                            hrp.CFrame = v.Glove.CFrame
-                            firetouchinterest(hrp, v.Glove, 0) 
-                            firetouchinterest(hrp, v.Glove, 1) 
-                        end)
-                        
-                        task.wait(0.05)
+                    -- Перевіряємо, чи це яблуко/перчатка
+                    if v.Name == "Slapple" or v.Name == "GoldenSlapple" or v.Name:find("Slapple") then 
+                        local targetPart = GetSlappleTouchPart(v)
 
-                        pcall(function()
-                            hrp.CFrame = safeCFrame
-                            hrp.AssemblyLinearVelocity = Vector3.zero
-                        end)
+                        if targetPart then
+                            local touchSuccess = false
 
-                        task.wait(math.random(15, 25) / 100) 
+                            pcall(function()
+                                -- Тимчасове переміщення гравця до яблука
+                                hrp.CFrame = targetPart.CFrame
+                                
+                                -- Посилений симульований дотик
+                                firetouchinterest(hrp, targetPart, 0) 
+                                task.wait(0.02)
+                                firetouchinterest(hrp, targetPart, 1) 
+                                touchSuccess = true
+                            end)
+
+                            if touchSuccess then
+                                collectedInLoop = collectedInLoop + 1 
+                            end
+                            
+                            task.wait(0.05)
+
+                            -- Повернення на підземну платформу
+                            pcall(function()
+                                hrp.CFrame = safeCFrame
+                                hrp.AssemblyLinearVelocity = Vector3.zero
+                            end)
+
+                            task.wait(math.random(15, 25) / 100) 
+                        end
                     end 
                 end 
             end
@@ -214,11 +248,11 @@ local function CollectSlapplesUnderground()
     return collectedInLoop
 end
 
--- 10. Надійний Server Hop (із тимчасовим дозволом телепорту)
+-- 10. Server Hop
 function DoServerHop() 
     if _G.IsHopping then return end 
     _G.IsHopping = true 
-    _G.AllowTeleport = true -- Дозволяємо телепорт для нашого Server Hop
+    _G.AllowTeleport = true
 
     SaveSettings() 
 
