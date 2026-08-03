@@ -375,7 +375,7 @@ local Tab = Window:MakeTab({
     PremiumOnly = false
 })
 
--- ЛІЧИЛЬНИК В ІНТЕРФЕЙСІ (ОНОВЛЮЄТЬСЯ КОЖНУ СЕКУНДУ)
+-- ЛІЧИЛЬНИК В ІНТЕРФЕЙСІ
 local StatLabel = Tab:AddLabel("Всього нафармовано: " .. tostring(_G.TotalSlapsFarmed) .. " слапів")
 
 task.spawn(function()
@@ -417,14 +417,14 @@ Tab:AddToggle({
                             if collectedCount > 0 then
                                 OrionLib:MakeNotification({ 
                                     Name = "Slapple Farm 🍏", 
-                                    Content = "Залутано усе! Зібрано: " .. tostring(collectedCount) .. " шт.! Перехід...", 
+                                    Content = "Залутано усе! Зібрано: " .. tostring(collectedCount) .. " слапів! Перехід...", 
                                     Image = "rbxassetid://7734053426", 
                                     Time = 2 
                                 }) 
                             else
                                 OrionLib:MakeNotification({ 
                                     Name = "Slapple Farm 🍏", 
-                                    Content = "Яблук немає. Переходимо далі...", 
+                                    Content = "Слапів немає. Переходимо далі...", 
                                     Image = "rbxassetid://7734053426", 
                                     Time = 2 
                                 }) 
