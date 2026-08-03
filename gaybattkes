@@ -21,6 +21,17 @@ if game.PlaceId ~= MAIN_PLACE_ID then
     return 
 end
 
+-- ПЕРЕВІРКА ПОСИЛАННЯ ПРИ ЗАПУСКУ
+task.spawn(function()
+    local success, response = pcall(function() return game:HttpGet(GITHUB_RAW_URL) end)
+    if success and response and not string.find(response, "404") then
+        print("✅ ПОСИЛАННЯ GITHUB ПРАЦЮЄ! Auto-Execute має функціонувати.")
+    else
+        warn("❌ УВАГА: Посилання на GitHub не працює! Перевір файл gaybattkes.lua")
+        warn("Відповідь сервера: " .. tostring(response))
+    end
+end)
+
 local serverStartTime = tick()
 
 _G.AllowTeleport = false
@@ -173,16 +184,28 @@ task.spawn(function()
     end
 end)
 
--- Виправлення помилки Orion Icons
+-- Виправлена загрузка Orion Library
 local OrionLib
-local successOrion, errOrion = pcall(function()
+local orionSuccess, orionResult = pcall(function()
     return loadstring(game:HttpGet("https://raw.githubusercontent.com/Giangplay/Script/main/Orion_Library_PE_V2.lua"))()
 end)
-if successOrion and type(successOrion) == "table" then
-    OrionLib = successOrion
+
+if orionSuccess and type(orionResult) == "table" then
+    OrionLib = orionResult
 else
-    warn("Помилка завантаження Orion: " .. tostring(errOrion))
-    OrionLib = { MakeNotification = function() end, MakeWindow = function() return { MakeTab = function() return { AddToggle = function() end, AddButton = function() end, AddLabel = function() end, AddParagraph = function() end } end } end }
+    warn("Помилка завантаження Orion: " .. tostring(orionResult))
+    -- Заглушка, щоб скрипт не крашився, якщо Orion не завантажився
+    OrionLib = { 
+        MakeNotification = function() end, 
+        MakeWindow = function() return { 
+            MakeTab = function() return { 
+                AddToggle = function() end, 
+                AddButton = function() end, 
+                AddLabel = function() end, 
+                AddParagraph = function() end 
+            } end 
+        } end 
+    }
 end
 
 -- 6. Server Hop
@@ -202,14 +225,13 @@ local function DoServerHop()
         }) 
     end)
 
-    -- РОЗШИРЕНА ДІАГНОСТИКА AUTO-EXECUTE
+    -- AUTO-EXECUTE З ДІАГНОСТИКОЮ
     local q = queue_on_teleport or queueonteleport
     if not q and getgenv then
         q = getgenv().queue_on_teleport or getgenv().queueonteleport
     end
     
     if q then 
-        -- Код тепер перевіряє, чи завантажився файл, і пише точну причину, якщо ні
         local execCode = [[
             repeat task.wait() until game:IsLoaded()
             local success, response = pcall(function()
@@ -222,10 +244,9 @@ local function DoServerHop()
                     print("✅ СКРИПТ УСПІШНО ВІДНОВЛЕНО ЧЕРЕЗ GITHUB!")
                 else
                     warn("❌ AUTO-EXEC: Файл завантажено, але це не LUA код! Помилка: " .. tostring(loadErr))
-                    warn("📋 ОТРИМАНИЙ ТЕКСТ: " .. string.sub(response, 1, 100))
                 end
             else
-                warn("❌ AUTO-EXEC: Не вдалося завантажити посилання! Перевір URL на GitHub. Помилка: " .. tostring(response))
+                warn("❌ AUTO-EXEC: Не вдалося завантажити посилання! Перевір URL на GitHub.")
             end
         ]]
         
@@ -375,6 +396,7 @@ local function CollectAllSlapplesRemote()
     return collectedCount
 end
 
+-- 7. Інтерфейс
 local Window = OrionLib:MakeWindow({
     Name = "Slapple Collector Hub 👏",
     IntroText = "Instant Remote Farm + AC Destroy",
