@@ -12,7 +12,7 @@ local ConfigFile = "SlappleFarm_Settings.json"
 local isInitializing = true
 local noclipConnection = nil
 
--- АНТИ-БРАЗИЛІЯ: Перевірка ID при запуску
+-- АНТИ-БРАЗИЛІЯ
 if game.PlaceId ~= MAIN_PLACE_ID then
     print("⚠️ ВІДНАЙДЕНО БРАЗИЛІЮ! ПОВЕРТАЄМОСЯ В ОСНОВНУ ГРУ...")
     _G.AllowTeleport = true
@@ -24,33 +24,22 @@ local serverStartTime = tick()
 _G.AllowTeleport = false
 _G.IsHopping = false
 
--- 1. МЕГА-ХУК: Абсолютний блок телепортів + Античіт
+-- 1. МЕГА-ХУК
 if hookmetamethod then
     local oldNamecall
     oldNamecall = hookmetamethod(game, "__namecall", newcclosure(function(self, ...)
         local method = getnamecallmethod()
         local args = {...}
 
-        -- АБСОЛЮТНИЙ ЗАХИСТ ВІД ТЕЛЕПОРТІВ
         if self == TeleportService and (method == "Teleport" or method == "TeleportToPlaceInstance" or method == "TeleportAsync") then
-            -- 1. Якщо скрипт не дав дозвіл на хоп -> БЛОКУЄМО
-            if not _G.AllowTeleport then 
-                print("🛑 ТЕЛЕПОРТ ЗАБЛОКОВАНО! (Не дозволено скриптом)")
-                return nil 
-            end
-            
-            -- 2. Якщо дозвіл є, перевіряємо куди ми телепортуємось. 
-            -- Для TeleportAsync місце йде другим аргументом, для інших - першим.
+            if not _G.AllowTeleport then return nil end
             local targetPlaceId = method == "TeleportAsync" and args[2] or args[1]
-            
-            -- Якщо це не головне лобі (MAIN_PLACE_ID) - БЛОКУЄМО!
             if targetPlaceId and targetPlaceId ~= MAIN_PLACE_ID then
-                print("🛑 ТЕЛЕПОРТ ЗАБЛОКОВАНО! (Спроба втекти в інший плейс: " .. tostring(targetPlaceId) .. ")")
+                print("🛑 ТЕЛЕПОРТ ЗАБЛОКОВАНО! (Спроба втекти в інший плейс)")
                 return nil
             end
         end
 
-        -- БЛОКУВАННЯ АНТИЧІТУ SLAP BATTLES
         if method == "FireServer" or method == "InvokeServer" then
             if self.Name == "Kicker" or self.Name == "Ban" or self.Name == "LogTunnel" or self.Name == "ModerationRemote" then
                 return nil 
@@ -142,22 +131,6 @@ end
 
 LoadSettings()
 
--- 7. ГЛОБАЛЬНИЙ СЛУХАЧ СЛАПІВ
-task.spawn(function()
-    local leaderstats = Players.LocalPlayer:WaitForChild("leaderstats")
-    local slapsStat = leaderstats:WaitForChild("Slaps")
-    local lastVal = slapsStat.Value
-    
-    slapsStat.Changed:Connect(function(newVal)
-        if newVal > lastVal then
-            local diff = newVal - lastVal
-            _G.TotalSlapsFarmed = _G.TotalSlapsFarmed + diff
-            SaveSettings()
-        end
-        lastVal = newVal
-    end)
-end)
-
 local function SetNoclip(state)
     if state then
         if not noclipConnection then
@@ -180,7 +153,7 @@ local function SetNoclip(state)
     end
 end
 
--- 8. АГРЕСИВНЕ БЛОКУВАННЯ БРАЗИЛІЇ (Видалення порталу)
+-- 7. АГРЕСИВНЕ БЛОКУВАННЯ БРАЗИЛІЇ
 local function DisableBrazilPortal()
     pcall(function()
         local lobby = workspace:FindFirstChild("Lobby")
@@ -208,7 +181,7 @@ end)
 
 local OrionLib = loadstring(game:HttpGet("https://raw.githubusercontent.com/Giangplay/Script/main/Orion_Library_PE_V2.lua"))()
 
--- 9. Server Hop
+-- 8. Server Hop
 local function DoServerHop()
     if _G.IsHopping then return end
     _G.IsHopping = true
@@ -277,12 +250,6 @@ local function DoServerHop()
     else 
         pcall(function() TeleportService:Teleport(placeId, Players.LocalPlayer) end) 
     end 
-
-    task.delay(6, function()
-        _G.IsHopping = false 
-        _G.AllowTeleport = false
-        serverStartTime = tick() 
-    end)
 end
 
 if not _G.TeleportHooked then
@@ -299,13 +266,18 @@ if not _G.TeleportHooked then
     end)
 end
 
--- 10. НЕЗАЛЕЖНИЙ ТАЙМЕР ANTI-STUCK
+-- 9. АБСОЛЮТНИЙ ТАЙМЕР ANTI-STUCK (Головний рятівник)
 task.spawn(function()
     while task.wait(1) do
-        if _G.SlappleFarm and not _G.IsHopping then
+        if _G.SlappleFarm then
             if tick() - serverStartTime > 25 then
-                print("⚠️ МИНУЛО 25 СЕКУНД! ПРИМУСОВИЙ SERVER HOP...")
+                print("⚠️ МИНУЛО 25 СЕКУНД! ПРИМУСОВИЙ СКИД ТА ХОП...")
+                -- Скидаємо всі стани, навіть якщо скрипт завис на зборі або хопі
+                _G.IsHopping = false
+                _G.AllowTeleport = false
+                task.wait(0.2)
                 DoServerHop()
+                serverStartTime = tick() -- Оновлюємо таймер, щоб не спамити хопи
             end
         end
     end
@@ -338,7 +310,7 @@ local function GetSlappleTouchPart(slapple)
     return nil
 end
 
--- 11. Збір яблук
+-- 10. Збір яблук і ПІДРАХУНОК СЛАПІВ
 local function CollectAllSlapplesRemote()
     local char = Players.LocalPlayer.Character
     local leaderstats = Players.LocalPlayer:FindFirstChild("leaderstats")
@@ -378,28 +350,33 @@ local function CollectAllSlapplesRemote()
                     if targetPart then
                         pcall(function()
                             firetouchinterest(hrp, targetPart, 0) 
-                            task.wait(0.01) 
+                            task.wait(0.03) 
                             firetouchinterest(hrp, targetPart, 1) 
                         end)
-                        task.wait(0.01) 
+                        task.wait(0.03) 
                     end
                 end 
             end
         end 
     end 
     
-    -- ДАЄМО СЕРВЕРУ ЦІЛИХ 2 СЕКУНДИ, щоб 100% нарахувати слапи
-    task.wait(2)
+    task.wait(1.5)
     
     local endSlaps = 0
     if leaderstats and leaderstats:FindFirstChild("Slaps") then
         endSlaps = leaderstats.Slaps.Value
     end
     
-    return endSlaps - startSlaps
+    local gainedSlaps = endSlaps - startSlaps
+    if gainedSlaps > 0 then
+        _G.TotalSlapsFarmed = _G.TotalSlapsFarmed + gainedSlaps
+        SaveSettings()
+    end
+    
+    return gainedSlaps
 end
 
--- 12. Інтерфейс
+-- 11. Інтерфейс
 local Window = OrionLib:MakeWindow({
     Name = "Slapple Collector Hub 👏",
     IntroText = "Instant Start",
