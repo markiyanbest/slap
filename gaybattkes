@@ -4,434 +4,427 @@ local HttpService = game:GetService("HttpService")
 local TeleportService = game:GetService("TeleportService")
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
-local VirtualUser = game:GetService("VirtualUser")
+local VirtualUser = game:GetService("VirtualUser") -- Для Anti-AFK
 
 local GITHUB_RAW_URL = "https://raw.githubusercontent.com/markiyanbest/slap/refs/heads/main/gaybattkes"
 local ConfigFile = "SlappleFarm_Settings.json"
+local isInitializing = true
+local noclipConnection = nil
 
 _G.AllowTeleport = false
 _G.IsHopping = false
-_G.SlappleFarm = false
-_G.AutoEnterArena = false
-_G.AutoExecute = true
 
-local noclipConnection = nil
-local isInitializing = true
-
--- ====================== ORION (ЗАВАНТАЖУЄМО ПЕРШИМ) ======================
-local OrionLib = loadstring(game:HttpGet("https://raw.githubusercontent.com/Giangplay/Script/main/Orion_Library_PE_V2.lua"))()
-
--- ====================== АНТИ-ЧЕЙТ ======================
+-- 1. МЕГА-ХУК: Анти-Телепорт + Блокування Ремоутів Античіту
 if hookmetamethod then
-    local oldNamecall = nil
-    oldNamecall = hookmetamethod(game, "__namecall", newcclosure(function(self, ...)
-        local method = getnamecallmethod()
+local oldNamecall
+oldNamecall = hookmetamethod(game, "__namecall", newcclosure(function(self, ...)
+local method = getnamecallmethod()
 
-        if self == TeleportService and (method:find("Teleport") or method:find("TeleportAsync")) then
-            if not _G.AllowTeleport then return end
-        end
+text
 
-        if method == "FireServer" or method == "InvokeServer" then
-            local name = self.Name
-            if name == "Kicker" or name == "Ban" or name == "LogTunnel" or name == "ModerationRemote" then
-                return
-            end
-        end
-
-        return oldNamecall(self, ...)
-    end))
-end
-
--- ====================== ANTI-AFK ======================
-Players.LocalPlayer.Idled:Connect(function()
-    VirtualUser:CaptureController()
-    VirtualUser:ClickButton2(Vector2.new())
-end)
-
--- ====================== БЕЗПЕЧНА ПЛАТФОРМА ======================
-local safePlatform = workspace:FindFirstChild("SlappleSafePlatform")
-if not safePlatform then
-    safePlatform = Instance.new("Part")
-    safePlatform.Name = "SlappleSafePlatform"
-    safePlatform.Size = Vector3.new(30, 2, 30)
-    safePlatform.Anchored = true
-    safePlatform.Transparency = 1
-    safePlatform.CanCollide = true
-    safePlatform.Parent = workspace
-end
-
--- ====================== НАЛАШТУВАННЯ ======================
-local function LoadSettings()
-    if isfile and readfile and isfile(ConfigFile) then
-        local ok, data = pcall(function()
-            return HttpService:JSONDecode(readfile(ConfigFile))
-        end)
-        if ok and type(data) == "table" then
-            _G.SlappleFarm = data.SlappleFarm or false
-            _G.AutoEnterArena = data.AutoEnterArena or false
-            _G.AutoExecute = data.AutoExecute ~= nil and data.AutoExecute or true
+    -- Блокування сторонніх телепортів
+    if self == TeleportService and (method:find("Teleport") or method == "TeleportToPlaceInstance" or method == "TeleportAsync") then
+        if not _G.AllowTeleport then
+            return nil
         end
     end
+
+    -- БЛОКУВАННЯ АНТИЧІТУ SLAP BATTLES
+    if method == "FireServer" or method == "InvokeServer" then
+        if self.Name == "Kicker" or self.Name == "Ban" or self.Name == "LogTunnel" or self.Name == "ModerationRemote" then
+            return nil -- Гра намагається нас кікнути, але сигнал блокується
+        end
+    end
+
+    return oldNamecall(self, ...)
+end))
+
 end
 
+-- 2. Anti-AFK (Щоб не кікало за 20 хвилин бездіяльності)
+Players.LocalPlayer.Idled:Connect(function()
+VirtualUser:CaptureController()
+VirtualUser:ClickButton2(Vector2.new())
+end)
+
+-- 3. Створення підземної безпечної платформи
+local safePlatform = workspace:FindFirstChild("SlappleSafePlatform")
+if not safePlatform then
+safePlatform = Instance.new("Part")
+safePlatform.Name = "SlappleSafePlatform"
+safePlatform.Size = Vector3.new(30, 2, 30)
+safePlatform.Anchored = true
+safePlatform.Transparency = 1
+safePlatform.CanCollide = true
+safePlatform.Parent = workspace
+end
+
+-- 4. Завантаження налаштувань
+local function LoadSettings()
+if isfile and readfile and isfile(ConfigFile) then
+local success, result = pcall(function()
+return HttpService:JSONDecode(readfile(ConfigFile))
+end)
+if success and type(result) == "table" then
+_G.SlappleFarm = result.SlappleFarm or false
+_G.AutoEnterArena = result.AutoEnterArena or false
+_G.ServerHopWhenEmpty = result.ServerHopWhenEmpty or false
+_G.AutoExecute = (result.AutoExecute ~= nil) and result.AutoExecute or true
+return
+end
+end
+_G.SlappleFarm = false
+_G.AutoEnterArena = false
+_G.ServerHopWhenEmpty = true
+_G.AutoExecute = true
+end
+
+-- 5. Збереження налаштувань
 local function SaveSettings()
-    if isInitializing or not writefile then return end
-    pcall(function()
-        writefile(ConfigFile, HttpService:JSONEncode({
-            SlappleFarm = _G.SlappleFarm,
-            AutoEnterArena = _G.AutoEnterArena,
-            AutoExecute = _G.AutoExecute
-        }))
-    end)
+if isInitializing then return end
+if writefile then
+pcall(function()
+writefile(ConfigFile, HttpService:JSONEncode({
+SlappleFarm = _G.SlappleFarm,
+AutoEnterArena = _G.AutoEnterArena,
+ServerHopWhenEmpty = _G.ServerHopWhenEmpty,
+AutoExecute = _G.AutoExecute
+}))
+end)
+end
 end
 
 LoadSettings()
 
--- ====================== ФУНКЦІЇ ======================
+-- 6. Функція Ноукліпу
 local function SetNoclip(state)
-    if state then
-        if not noclipConnection then
-            noclipConnection = RunService.Stepped:Connect(function()
-                local char = Players.LocalPlayer.Character
-                if char then
-                    for _, part in pairs(char:GetDescendants()) do
-                        if part:IsA("BasePart") then
-                            part.CanCollide = false
-                        end
-                    end
-                end
-            end)
-        end
-    else
-        if noclipConnection then
-            noclipConnection:Disconnect()
-            noclipConnection = nil
-        end
-    end
+if state then
+if not noclipConnection then
+noclipConnection = RunService.Stepped:Connect(function()
+local char = Players.LocalPlayer.Character
+if char then
+for _, v in pairs(char:GetDescendants()) do
+if v:IsA("BasePart") and v.Name ~= "SlappleSafePlatform" then
+v.CanCollide = false
+end
+end
+end
+end)
+end
+else
+if noclipConnection then
+noclipConnection:Disconnect()
+noclipConnection = nil
+end
+end
 end
 
-local function NukeBrazilPortal()
-    local lobby = workspace:FindFirstChild("Lobby")
-    if not lobby then return end
-    local brazil = lobby:FindFirstChild("brazil")
-    if not brazil then return end
-
-    for _, v in pairs(brazil:GetDescendants()) do
-        if v:IsA("BasePart") then
-            pcall(function()
-                v.CanTouch = false
-                v.CanCollide = false
-                v.CFrame = CFrame.new(0, -10000, 0)
-                v.Size = Vector3.new(0.1, 0.1, 0.1)
-            end)
-        end
-    end
-
-    pcall(function()
-        if brazil:IsA("Model") then
-            brazil:PivotTo(CFrame.new(0, -10000, 0))
-        end
-    end)
+-- 7. Блокування порталу Бразилії
+local function DisableBrazilPortal()
+local lobby = workspace:FindFirstChild("Lobby")
+if lobby then
+local brazil = lobby:FindFirstChild("brazil")
+if brazil then
+for _, v in pairs(brazil:GetDescendants()) do
+if v:IsA("BasePart") and v.CanTouch then
+v.CanTouch = false
+end
+end
+end
+end
 end
 
+local OrionLib = loadstring(game:HttpGet(("https://raw.githubusercontent.com/Giangplay/Script/main/Orion_Library_PE_V2.lua")))()
+
+-- 8. Відстеження помилок телепортації
+if not _G.TeleportHooked then
+_G.TeleportHooked = true
+TeleportService.TeleportInitFailed:Connect(function(player, teleportResult, errorMessage)
+if player == Players.LocalPlayer then
+_G.IsHopping = false
+_G.AllowTeleport = false
+task.wait(1.5)
+if _G.SlappleFarm then
+DoServerHop()
+end
+end
+end)
+end
+
+-- 9. Вхід на арену
 local function EnterArena()
-    NukeBrazilPortal()
-
-    local char = Players.LocalPlayer.Character
-    if not char then return end
-    if not char:FindFirstChild("HumanoidRootPart") then return end
-    if char:FindFirstChild("entered") then return end
-
-    local lobby = workspace:FindFirstChild("Lobby")
-    if not lobby then return end
-
-    local tp1 = lobby:FindFirstChild("Teleport1")
-    if not tp1 then return end
-
-    local hrp = char.HumanoidRootPart
-
-    pcall(function()
-        hrp.CFrame = tp1.CFrame * CFrame.new(0, 3, 0)
-        hrp.AssemblyLinearVelocity = Vector3.zero
-    end)
-
-    task.wait(0.2)
-
-    pcall(function()
-        firetouchinterest(hrp, tp1, 0)
-        task.wait(0.1)
-        firetouchinterest(hrp, tp1, 1)
-    end)
+DisableBrazilPortal()
+local char = Players.LocalPlayer.Character
+if char and char:FindFirstChild("Head") and not char:FindFirstChild("entered") then
+local lobby = workspace:FindFirstChild("Lobby")
+if lobby and lobby:FindFirstChild("Teleport1") then
+firetouchinterest(char.Head, lobby.Teleport1, 0)
+task.wait(0.1)
+firetouchinterest(char.Head, lobby.Teleport1, 1)
+end
+end
 end
 
+-- Пошук деталі підбору
 local function GetSlappleTouchPart(slapple)
-    if slapple:FindFirstChild("Glove") and slapple.Glove:IsA("BasePart") then
-        return slapple.Glove
-    end
-    if slapple:IsA("BasePart") then
-        return slapple
-    end
-    for _, child in ipairs(slapple:GetChildren()) do
-        if child:IsA("BasePart") then
-            return child
-        end
-    end
-    return nil
+if slapple:FindFirstChild("Glove") and slapple.Glove:IsA("BasePart") then
+return slapple.Glove
+elseif slapple:IsA("BasePart") then
+return slapple
+else
+for _, child in ipairs(slapple:GetChildren()) do
+if child:IsA("BasePart") then
+return child
+end
+end
+end
+return nil
 end
 
-local function CollectAllSlapples()
-    local char = Players.LocalPlayer.Character
-    if not char then return 0 end
-    if not char:FindFirstChild("entered") then return 0 end
-    if not char:FindFirstChild("HumanoidRootPart") then return 0 end
+-- 10. Повний збір ВСІХ яблук
+local function CollectAllSlapplesRemote()
+local char = Players.LocalPlayer.Character
+local collectedCount = 0
 
+text
+
+if char and char:FindFirstChild("HumanoidRootPart") and char:FindFirstChild("entered") then 
     local hrp = char.HumanoidRootPart
     local arena = workspace:FindFirstChild("Arena")
-    if not arena then return 0 end
 
-    local island5 = arena:FindFirstChild("island5")
-    if not island5 then return 0 end
+    if arena and arena:FindFirstChild("island5") and arena.island5:FindFirstChild("Slapples") then 
+        local island = arena.island5
+        local slappleContainer = island.Slapples
+        local items = slappleContainer:GetChildren()
 
-    local slapples = island5:FindFirstChild("Slapples")
-    if not slapples then return 0 end
+        local islandCFrame = island:IsA("Model") and island:GetPivot() or island.CFrame
+        local safeCFrame = islandCFrame * CFrame.new(0, -15, 0)
+        safePlatform.CFrame = islandCFrame * CFrame.new(0, -17, 0)
 
-    local safePos = island5:GetPivot() * CFrame.new(0, -15, 0)
-    safePlatform.CFrame = island5:GetPivot() * CFrame.new(0, -17, 0)
-
-    pcall(function()
-        hrp.CFrame = safePos
-        hrp.AssemblyLinearVelocity = Vector3.zero
-    end)
-
-    task.wait(0.5)
-
-    local count = 0
-
-    for _, slapple in ipairs(slapples:GetChildren()) do
-        if not _G.SlappleFarm then break end
-
-        if slapple.Name:find("Slapple") then
-            local part = GetSlappleTouchPart(slapple)
-            if part then
-                pcall(function()
-                    firetouchinterest(hrp, part, 0)
-                    task.wait(0.02)
-                    firetouchinterest(hrp, part, 1)
-                end)
-                count = count + 1
-                task.wait(0.04)
-            end
-        end
-    end
-
-    return count
-end
-
--- ====================== SERVER HOP ======================
-function DoServerHop()
-    if _G.IsHopping then return end
-    _G.IsHopping = true
-    _G.AllowTeleport = true
-
-    SaveSettings()
-
-    pcall(function()
-        OrionLib:MakeNotification({
-            Name = "Server Hop 🚀",
-            Content = "Перехід на новий сервер...",
-            Image = "rbxassetid://7734053426",
-            Time = 2
-        })
-    end)
-
-    if _G.AutoExecute then
-        local q = nil
-        pcall(function() q = queue_on_teleport end)
-        if not q then pcall(function() q = queueonteleport end) end
-        if not q and getgenv then pcall(function() q = getgenv().queue_on_teleport end) end
-
-        if q then
+        if (hrp.Position - safeCFrame.Position).Magnitude > 5 then
             pcall(function()
-                q('repeat task.wait() until game:IsLoaded(); loadstring(game:HttpGet("' .. GITHUB_RAW_URL .. '?v=' .. tostring(tick()) .. '"))()')
+                hrp.CFrame = safeCFrame
+                hrp.AssemblyLinearVelocity = Vector3.zero
             end)
+            task.wait(0.5) 
         end
-    end
 
-    local placeId = game.PlaceId
-    local jobId = game.JobId
-    local targetServerId = nil
+        for _, v in ipairs(items) do 
+            if not _G.SlappleFarm then break end
 
-    local ok, response = pcall(function()
-        return game:HttpGet("https://games.roblox.com/v1/games/" .. tostring(placeId) .. "/servers/Public?sortOrder=Asc&limit=100")
-    end)
+            if v.Name == "Slapple" or v.Name == "GoldenSlapple" or v.Name:find("Slapple") then 
+                local targetPart = GetSlappleTouchPart(v)
 
-    if ok and response then
-        local dok, decoded = pcall(function() return HttpService:JSONDecode(response) end)
-        if dok and decoded and decoded.data then
-            local list = {}
-            for _, s in ipairs(decoded.data) do
-                if type(s) == "table" and s.playing and s.maxPlayers and s.playing < s.maxPlayers and s.id ~= jobId then
-                    table.insert(list, s.id)
+                if targetPart then
+                    pcall(function()
+                        firetouchinterest(hrp, targetPart, 0) 
+                        task.wait(0.02)
+                        firetouchinterest(hrp, targetPart, 1) 
+                    end)
+                    collectedCount = collectedCount + 1 
+                    task.wait(0.04) 
                 end
-            end
-            if #list > 0 then
-                targetServerId = list[math.random(1, #list)]
-            end
+            end 
         end
-    end
+    end 
+end 
+return collectedCount
 
-    pcall(function()
-        if targetServerId then
-            TeleportService:TeleportToPlaceInstance(placeId, targetServerId, Players.LocalPlayer)
-        else
-            TeleportService:Teleport(placeId, Players.LocalPlayer)
-        end
-    end)
-
-    task.delay(6, function()
-        _G.IsHopping = false
-        _G.AllowTeleport = false
-    end)
 end
 
--- ====================== TELEPORT FAILED ======================
-TeleportService.TeleportInitFailed:Connect(function(player)
-    if player == Players.LocalPlayer then
-        _G.IsHopping = false
-        _G.AllowTeleport = false
-        task.wait(2)
-        if _G.SlappleFarm then
-            DoServerHop()
-        end
-    end
+-- 11. Server Hop
+function DoServerHop()
+if _G.IsHopping then return end
+_G.IsHopping = true
+_G.AllowTeleport = true
+
+text
+
+SaveSettings() 
+
+pcall(function()
+    OrionLib:MakeNotification({ 
+        Name = "Server Hop 🚀", 
+        Content = "Переходимо на новий сервер...", 
+        Image = "rbxassetid://7734053426", 
+        Time = 2 
+    }) 
 end)
 
--- Знищуємо портал одразу
-NukeBrazilPortal()
+if _G.AutoExecute then 
+    local q = queue_on_teleport or queueonteleport
+    if not q and getgenv then
+        q = getgenv().queue_on_teleport or getgenv().queueonteleport
+    end
+    
+    if q then 
+        pcall(function() 
+            q('repeat task.wait() until game:IsLoaded(); loadstring(game:HttpGet("' .. GITHUB_RAW_URL .. '?v=' .. tostring(tick()) .. '"))()')
+        end) 
+    end 
+end 
 
--- ====================== GUI ======================
+local placeId = game.PlaceId 
+local jobId = game.JobId 
+local targetServerId = nil 
+
+local success, response = pcall(function() 
+    return game:HttpGet("https://games.roblox.com/v1/games/" .. tostring(placeId) .. "/servers/Public?sortOrder=Asc&limit=100") 
+end) 
+
+if success and response then 
+    local decodeSuccess, decoded = pcall(function() return HttpService:JSONDecode(response) end) 
+    if decodeSuccess and decoded and decoded.data then 
+        local validServers = {} 
+        for _, server in ipairs(decoded.data) do 
+            if type(server) == "table" and server.playing and server.maxPlayers and server.playing < server.maxPlayers and server.id ~= jobId then 
+                table.insert(validServers, server.id) 
+            end 
+        end 
+        if #validServers > 0 then 
+            targetServerId = validServers[math.random(1, #validServers)] 
+        end 
+    end 
+end 
+
+if targetServerId then 
+    local tpSuccess = pcall(function() 
+        TeleportService:TeleportToPlaceInstance(placeId, targetServerId, Players.LocalPlayer) 
+    end) 
+    if not tpSuccess then 
+        TeleportService:Teleport(placeId, Players.LocalPlayer) 
+    end 
+else 
+    TeleportService:Teleport(placeId, Players.LocalPlayer) 
+end 
+
+task.delay(6, function()
+    _G.IsHopping = false 
+    _G.AllowTeleport = false
+end)
+
+end
+
+-- 12. Інтерфейс
 local Window = OrionLib:MakeWindow({
-    Name = "Slapple Collector Hub 👏",
-    IntroText = "30s Auto Hop | AC Bypass",
-    IntroIcon = "rbxassetid://15315284749",
-    HidePremium = false,
-    IntroEnabled = true
+Name = "Slapple Collector Hub 👏",
+IntroText = "Instant Remote Farm + AC Bypass",
+IntroIcon = "rbxassetid://15315284749",
+HidePremium = false,
+SaveConfig = false,
+IntroEnabled = true,
+ConfigFolder = "SlappleFarmConfig"
 })
 
+-- Вкладка фарму
 local Tab = Window:MakeTab({
-    Name = "Slapples Farm",
-    Icon = "rbxassetid://7733673987",
-    PremiumOnly = false
+Name = "Slapples Farm",
+Icon = "rbxassetid://7733673987",
+PremiumOnly = false
 })
 
 Tab:AddToggle({
-    Name = "Autofarm Slapples + Auto Hop",
-    Default = _G.SlappleFarm,
-    Callback = function(Value)
-        _G.SlappleFarm = Value
-        SaveSettings()
-        SetNoclip(Value)
+Name = "Autofarm Slapples (Без ТП + Hop)",
+Default = _G.SlappleFarm,
+Callback = function(Value)
+_G.SlappleFarm = Value
+SaveSettings()
+SetNoclip(Value)
 
-        if Value then
-            task.spawn(function()
-                local serverStartTime = tick()
+text
 
-                while _G.SlappleFarm do
+    if Value then 
+        task.spawn(function() 
+            while _G.SlappleFarm do 
+                local char = Players.LocalPlayer.Character 
+                
+                if char and not char:FindFirstChild("entered") then 
+                    EnterArena() 
+                    task.wait(1) 
+                end 
 
-                    -- 30 СЕКУНД ТАЙМЕР
-                    if tick() - serverStartTime > 30 then
-                        pcall(function()
-                            OrionLib:MakeNotification({
-                                Name = "⚠️ 30s Таймер",
-                                Content = "Ліміт часу вичерпано. Server Hop...",
-                                Image = "rbxassetid://7734053426",
-                                Time = 3
-                            })
-                        end)
-                        task.wait(0.5)
-                        DoServerHop()
-                        break
-                    end
+                if char and char:FindFirstChild("entered") then
+                    local collectedCount = CollectAllSlapplesRemote()
 
-                    local char = Players.LocalPlayer.Character
-
-                    if char and not char:FindFirstChild("entered") then
-                        EnterArena()
-                        task.wait(1.2)
-                    end
-
-                    if char and char:FindFirstChild("entered") then
-                        local collected = CollectAllSlapples()
-
-                        pcall(function()
-                            OrionLib:MakeNotification({
-                                Name = "Slapple Farm 🍏",
-                                Content = collected > 0
-                                    and "Зібрано " .. tostring(collected) .. " яблук! Перехід..."
-                                    or "Яблук немає. Перехід...",
-                                Image = "rbxassetid://7734053426",
-                                Time = 2.5
-                            })
-                        end)
-
-                        task.wait(0.8)
-                        DoServerHop()
-                        break
-                    end
+                    pcall(function()
+                        if collectedCount > 0 then
+                            OrionLib:MakeNotification({ 
+                                Name = "Slapple Farm 🍏", 
+                                Content = "Залутано усе! Зібрано: " .. tostring(collectedCount) .. " шт.! Перехід...", 
+                                Image = "rbxassetid://7734053426", 
+                                Time = 2 
+                            }) 
+                        else
+                            OrionLib:MakeNotification({ 
+                                Name = "Slapple Farm 🍏", 
+                                Content = "Яблук немає. Переходимо далі...", 
+                                Image = "rbxassetid://7734053426", 
+                                Time = 2 
+                            }) 
+                        end
+                    end)
 
                     task.wait(0.5)
+                    DoServerHop()
+                    break 
                 end
-            end)
-        end
-    end
+                
+                task.wait(0.5) 
+            end 
+        end) 
+    end 
+end 
+
 })
 
 Tab:AddToggle({
-    Name = "Auto Enter Arena",
-    Default = _G.AutoEnterArena,
-    Callback = function(Value)
-        _G.AutoEnterArena = Value
-        SaveSettings()
-        if Value then
-            task.spawn(function()
-                while _G.AutoEnterArena do
-                    EnterArena()
-                    task.wait(0.6)
-                end
-            end)
-        end
-    end
+Name = "Auto Enter Arena",
+Default = _G.AutoEnterArena,
+Callback = function(Value)
+_G.AutoEnterArena = Value
+SaveSettings()
+
+text
+
+    if Value then 
+        task.spawn(function() 
+            while _G.AutoEnterArena do 
+                EnterArena() 
+                task.wait(0.5) 
+            end 
+        end) 
+    end 
+end 
+
 })
 
 Tab:AddToggle({
-    Name = "Auto-Execute після Hop",
-    Default = _G.AutoExecute,
-    Callback = function(Value)
-        _G.AutoExecute = Value
-        SaveSettings()
-    end
+Name = "Auto-Execute (Автозбереження)",
+Default = _G.AutoExecute,
+Callback = function(Value)
+_G.AutoExecute = Value
+SaveSettings()
+end
 })
 
 Tab:AddButton({
-    Name = "Ручний Server Hop",
-    Callback = function()
-        DoServerHop()
-    end
+Name = "Ручний Server Hop",
+Callback = function()
+DoServerHop()
+end
 })
 
-local InfoTab = Window:MakeTab({
-    Name = "Info 🛡️",
-    Icon = "rbxassetid://7733960948",
-    PremiumOnly = false
+-- НОВА ВКЛАДКА: ОБХОДИ
+local BypassTab = Window:MakeTab({
+Name = "Bypasses & Utils 🛡️",
+Icon = "rbxassetid://7733960948",
+PremiumOnly = false
 })
 
-InfoTab:AddLabel("Anti-Cheat Bypass ✅")
-InfoTab:AddLabel("Anti-AFK ✅")
-InfoTab:AddLabel("30s Auto Hop ✅")
-InfoTab:AddLabel("Brazil Portal Nuke ✅")
-InfoTab:AddParagraph(
-    "Як працює 30s таймер",
-    "Якщо за 30 секунд не вдалось потрапити на арену і зібрати яблука (наприклад застряг у порталі Бразилії або будь-якому іншому місці) — скрипт автоматично виконує Server Hop."
-)
+BypassTab:AddLabel("Anti-Cheat Bypass: ✅ ACTIVE")
+BypassTab:AddParagraph("Блокування ремоутів", "Скрипт автоматично блокує Kicker, Ban, LogTunnel та ModerationRemote. Ви не отримаєте кік за телепорт.")
+
+BypassTab:AddLabel("Anti-AFK: ✅ ACTIVE")
+BypassTab:AddParagraph("Блокування AFK", "Вас не кікне за бездіяльність через 20 хвилин. Можете залишити фарм на ніч.")
 
 isInitializing = false
