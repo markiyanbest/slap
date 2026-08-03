@@ -6,10 +6,22 @@ local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local VirtualUser = game:GetService("VirtualUser")
 
+-- Головний ID гри Slap Battles (Лобі)
+local MAIN_PLACE_ID = 6403373529 
+
 local GITHUB_RAW_URL = "https://raw.githubusercontent.com/markiyanbest/slap/main/gaybattkes.lua"
 local ConfigFile = "SlappleFarm_Settings.json"
 local isInitializing = true
 local noclipConnection = nil
+
+-- АНТИ-БРАЗИЛІЯ: Якщо ми потрапили не в головне лобі (ID 6403373529), негайно тікаємо!
+if game.PlaceId ~= MAIN_PLACE_ID then
+    print("⚠️ ВІДНАЙДЕНО БРАЗИЛІЮ! ПОВЕРТАЄМОСЯ В ОСНОВНУ ГРУ...")
+    local p = Players.LocalPlayer
+    _G.AllowTeleport = true
+    pcall(function() TeleportService:Teleport(MAIN_PLACE_ID, p) end)
+    return -- Зупиняємо скрипт, щоб він не ламався тут
+end
 
 local serverStartTime = tick()
 
@@ -141,7 +153,6 @@ local function DisableBrazilPortal()
         if lobby then
             local brazil = lobby:FindFirstChild("brazil")
             if brazil then
-                -- Видаляємо CanTouch і самі партки, щоб не засмоктало
                 for _, v in pairs(brazil:GetDescendants()) do
                     if v:IsA("BasePart") then
                         v.CanTouch = false
@@ -149,14 +160,12 @@ local function DisableBrazilPortal()
                         v.Transparency = 1
                     end
                 end
-                -- Повністю видаляємо модель, щоб гра не змогла нас телепортувати
                 brazil:Destroy() 
             end
         end
     end)
 end
 
--- Запускаємо в циклі, бо гра може респавнити портал
 task.spawn(function()
     while task.wait(1) do
         DisableBrazilPortal()
@@ -189,6 +198,7 @@ local function DoServerHop()
         end
         
         if q then 
+            -- Використовуємо MAIN_PLACE_ID замість game.PlaceId на всякий випадок
             local execCode = 'repeat task.wait() until game:IsLoaded(); loadstring(game:HttpGet("' .. GITHUB_RAW_URL .. '"))()'
             local success, err = pcall(function() 
                 q(execCode)
@@ -205,12 +215,11 @@ local function DoServerHop()
         warn("⚠️ Авто-екзекьют вимкнено в налаштуваннях.")
     end 
 
-    local placeId = game.PlaceId 
     local jobId = game.JobId 
     local targetServerId = nil 
 
     local success, response = pcall(function() 
-        return game:HttpGet("https://games.roblox.com/v1/games/" .. tostring(placeId) .. "/servers/Public?sortOrder=Asc&limit=100") 
+        return game:HttpGet("https://games.roblox.com/v1/games/" .. tostring(MAIN_PLACE_ID) .. "/servers/Public?sortOrder=Asc&limit=100") 
     end) 
 
     if success and response then 
@@ -229,9 +238,9 @@ local function DoServerHop()
     end 
 
     if targetServerId then 
-        pcall(function() TeleportService:TeleportToPlaceInstance(placeId, targetServerId, Players.LocalPlayer) end)
+        pcall(function() TeleportService:TeleportToPlaceInstance(MAIN_PLACE_ID, targetServerId, Players.LocalPlayer) end)
     else 
-        pcall(function() TeleportService:Teleport(placeId, Players.LocalPlayer) end) 
+        pcall(function() TeleportService:Teleport(MAIN_PLACE_ID, Players.LocalPlayer) end) 
     end 
 
     task.delay(6, function()
@@ -359,10 +368,9 @@ Tab:AddToggle({
 
         if Value then 
             task.spawn(function() 
-                local lobbyStuckTimer = 0 -- Таймер для анти-бразилії
+                local lobbyStuckTimer = 0 
                 
                 while _G.SlappleFarm do 
-                    -- ПЕРЕВІРКА НА 25 СЕКУНД (ANTI-STUCK ГЛОБАЛЬНИЙ)
                     if tick() - serverStartTime > 25 then
                         DoServerHop()
                         break
@@ -374,15 +382,14 @@ Tab:AddToggle({
                         EnterArena() 
                         lobbyStuckTimer = lobbyStuckTimer + 1
                         
-                        -- АНТИ-БРАЗИЛІЯ: Якщо ми в лобі більше 15 секунд, значить ми застрягли (в Бразилії або ще десь)
                         if lobbyStuckTimer > 15 then
-                            print("⚠️ ЗАСТРЯГ У ЛОБІ/БРАЗИЛІЇ! ПРИМУСОВИЙ СКИД (HOP)...")
+                            print("⚠️ ЗАСТРЯГ У ЛОБІ! ПРИМУСОВИЙ СКИД (HOP)...")
                             DoServerHop()
                             break
                         end
                         task.wait(1) 
                     else
-                        lobbyStuckTimer = 0 -- Скидаємо таймер, якщо ми успішно зайшли на арену
+                        lobbyStuckTimer = 0 
                     end
 
                     if char and char:FindFirstChild("entered") then
