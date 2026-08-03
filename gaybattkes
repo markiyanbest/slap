@@ -7,7 +7,6 @@ local RunService = game:GetService("RunService")
 local VirtualUser = game:GetService("VirtualUser")
 
 local MAIN_PLACE_ID = 6403373529 
-
 local GITHUB_RAW_URL = "https://raw.githubusercontent.com/markiyanbest/slap/main/gaybattkes.lua"
 local ConfigFile = "SlappleFarm_Settings.json"
 local isInitializing = true
@@ -15,29 +14,16 @@ local noclipConnection = nil
 
 if game.PlaceId ~= MAIN_PLACE_ID then
     print("⚠️ ВІДНАЙДЕНО БРАЗИЛІЮ! ПОВЕРТАЄМОСЯ В ОСНОВНУ ГРУ...")
-    local p = Players.LocalPlayer
     _G.AllowTeleport = true
-    pcall(function() TeleportService:Teleport(MAIN_PLACE_ID, p) end)
+    pcall(function() TeleportService:Teleport(MAIN_PLACE_ID, Players.LocalPlayer) end)
     return 
 end
 
--- ПЕРЕВІРКА ПОСИЛАННЯ ПРИ ЗАПУСКУ
-task.spawn(function()
-    local success, response = pcall(function() return game:HttpGet(GITHUB_RAW_URL) end)
-    if success and response and not string.find(response, "404") then
-        print("✅ ПОСИЛАННЯ GITHUB ПРАЦЮЄ! Auto-Execute має функціонувати.")
-    else
-        warn("❌ УВАГА: Посилання на GitHub не працює! Перевір файл gaybattkes.lua")
-        warn("Відповідь сервера: " .. tostring(response))
-    end
-end)
-
 local serverStartTime = tick()
-
 _G.AllowTeleport = false
 _G.IsHopping = false
 
--- 1. МЕГА-ХУК
+-- 1. МЕГА-ХУК: Блок телепортів + Античіт
 if hookmetamethod then
     local oldNamecall
     oldNamecall = hookmetamethod(game, "__namecall", newcclosure(function(self, ...)
@@ -106,20 +92,20 @@ if not safePlatform then
     safePlatform.Parent = workspace
 end
 
--- 5. Завантаження налаштувань
+-- 5. Завантаження та збереження налаштувань
 local function LoadSettings()
     if isfile and readfile and isfile(ConfigFile) then
         local success, result = pcall(function() return HttpService:JSONDecode(readfile(ConfigFile)) end)
         if success and type(result) == "table" then
             _G.SlappleFarm = result.SlappleFarm or false
             _G.AutoEnterArena = result.AutoEnterArena or false
-            _G.ServerHopWhenEmpty = result.ServerHopWhenEmpty or false
+            _G.AutoExecute = (result.AutoExecute ~= nil) and result.AutoExecute or true
             return
         end
     end
     _G.SlappleFarm = false
     _G.AutoEnterArena = false
-    _G.ServerHopWhenEmpty = true
+    _G.AutoExecute = true
 end
 
 local function SaveSettings()
@@ -129,7 +115,7 @@ local function SaveSettings()
             writefile(ConfigFile, HttpService:JSONEncode({
                 SlappleFarm = _G.SlappleFarm,
                 AutoEnterArena = _G.AutoEnterArena,
-                ServerHopWhenEmpty = _G.ServerHopWhenEmpty
+                AutoExecute = _G.AutoExecute
             }))
         end)
     end
@@ -184,28 +170,15 @@ task.spawn(function()
     end
 end)
 
--- Виправлена загрузка Orion Library
 local OrionLib
 local orionSuccess, orionResult = pcall(function()
     return loadstring(game:HttpGet("https://raw.githubusercontent.com/Giangplay/Script/main/Orion_Library_PE_V2.lua"))()
 end)
-
 if orionSuccess and type(orionResult) == "table" then
     OrionLib = orionResult
 else
     warn("Помилка завантаження Orion: " .. tostring(orionResult))
-    -- Заглушка, щоб скрипт не крашився, якщо Orion не завантажився
-    OrionLib = { 
-        MakeNotification = function() end, 
-        MakeWindow = function() return { 
-            MakeTab = function() return { 
-                AddToggle = function() end, 
-                AddButton = function() end, 
-                AddLabel = function() end, 
-                AddParagraph = function() end 
-            } end 
-        } end 
-    }
+    OrionLib = { MakeNotification = function() end, MakeWindow = function() return { MakeTab = function() return { AddToggle = function() end, AddButton = function() end, AddLabel = function() end, AddParagraph = function() end } end } end }
 end
 
 -- 6. Server Hop
@@ -225,42 +198,22 @@ local function DoServerHop()
         }) 
     end)
 
-    -- AUTO-EXECUTE З ДІАГНОСТИКОЮ
-    local q = queue_on_teleport or queueonteleport
-    if not q and getgenv then
-        q = getgenv().queue_on_teleport or getgenv().queueonteleport
-    end
-    
-    if q then 
-        local execCode = [[
-            repeat task.wait() until game:IsLoaded()
-            local success, response = pcall(function()
-                return game:HttpGet("]] .. GITHUB_RAW_URL .. [[")
-            end)
-            if success and response then
-                local execFunc, loadErr = loadstring(response)
-                if execFunc then
-                    execFunc()
-                    print("✅ СКРИПТ УСПІШНО ВІДНОВЛЕНО ЧЕРЕЗ GITHUB!")
-                else
-                    warn("❌ AUTO-EXEC: Файл завантажено, але це не LUA код! Помилка: " .. tostring(loadErr))
-                end
-            else
-                warn("❌ AUTO-EXEC: Не вдалося завантажити посилання! Перевір URL на GitHub.")
-            end
-        ]]
-        
-        local success, err = pcall(function() 
-            q(execCode)
-        end)
-        if not success then
-            warn("❌ ПОМИЛКА queue_on_teleport: " .. tostring(err))
-        else
-            print("✅ AUTO-EXECUTE успішно заплановано!")
+    -- СПРОЩЕНИЙ AUTO-EXECUTE (працює на всіх експлойтерах)
+    if _G.AutoExecute then 
+        local q = queue_on_teleport or queueonteleport
+        if getgenv and not q then
+            q = getgenv().queue_on_teleport or getgenv().queueonteleport
         end
-    else
-        warn("⚠️ КРИТИЧНА ПОМИЛКА: Твій експлойтер НЕ підтримує queue_on_teleport!")
-    end 
+        
+        if q then 
+            -- Максимально простий код, щоб не було помилок синтаксису
+            local execCode = 'repeat task.wait() until game:IsLoaded() local s,r = pcall(function() return game:HttpGet("' .. GITHUB_RAW_URL .. '") end) if s and r then loadstring(r)() else warn("AUTO-EXEC FAIL") end'
+            pcall(function() q(execCode) end)
+            print("✅ AUTO-EXECUTE заплановано!")
+        else
+            warn("⚠️ Експлойтер НЕ підтримує queue_on_teleport!")
+        end 
+    end
 
     local jobId = game.JobId 
     local targetServerId = nil 
@@ -311,6 +264,7 @@ if not _G.TeleportHooked then
     end)
 end
 
+-- 7. НЕЗАЛЕЖНИЙ ТАЙМЕР ANTI-STUCK
 task.spawn(function()
     while task.wait(1) do
         if _G.SlappleFarm and not _G.IsHopping then
@@ -396,7 +350,7 @@ local function CollectAllSlapplesRemote()
     return collectedCount
 end
 
--- 7. Інтерфейс
+-- 8. Інтерфейс
 local Window = OrionLib:MakeWindow({
     Name = "Slapple Collector Hub 👏",
     IntroText = "Instant Remote Farm + AC Destroy",
@@ -480,6 +434,16 @@ Tab:AddToggle({
             end) 
         end 
     end 
+})
+
+-- ПОВЕРНУТА КНОПКА AUTO-EXECUTE
+Tab:AddToggle({
+    Name = "Auto-Execute (Авто-запуск)",
+    Default = _G.AutoExecute,
+    Callback = function(Value)
+        _G.AutoExecute = Value
+        SaveSettings()
+    end
 })
 
 Tab:AddButton({
