@@ -12,7 +12,7 @@ local ConfigFile = "SlappleFarm_Settings.json"
 local isInitializing = true
 local noclipConnection = nil
 
--- АНТИ-БРАЗИЛІЯ
+-- АНТИ-БРАЗИЛІЯ: Перевірка ID при запуску
 if game.PlaceId ~= MAIN_PLACE_ID then
     print("⚠️ ВІДНАЙДЕНО БРАЗИЛІЮ! ПОВЕРТАЄМОСЯ В ОСНОВНУ ГРУ...")
     _G.AllowTeleport = true
@@ -24,22 +24,33 @@ local serverStartTime = tick()
 _G.AllowTeleport = false
 _G.IsHopping = false
 
--- 1. МЕГА-ХУК
+-- 1. МЕГА-ХУК: Абсолютний блок телепортів + Античіт
 if hookmetamethod then
     local oldNamecall
     oldNamecall = hookmetamethod(game, "__namecall", newcclosure(function(self, ...)
         local method = getnamecallmethod()
         local args = {...}
 
-        if self == TeleportService and (method:find("Teleport") or method == "TeleportToPlaceInstance" or method == "TeleportAsync") then
-            if not _G.AllowTeleport then return nil end
-            local targetPlaceId = args[1]
+        -- АБСОЛЮТНИЙ ЗАХИСТ ВІД ТЕЛЕПОРТІВ
+        if self == TeleportService and (method == "Teleport" or method == "TeleportToPlaceInstance" or method == "TeleportAsync") then
+            -- 1. Якщо скрипт не дав дозвіл на хоп -> БЛОКУЄМО
+            if not _G.AllowTeleport then 
+                print("🛑 ТЕЛЕПОРТ ЗАБЛОКОВАНО! (Не дозволено скриптом)")
+                return nil 
+            end
+            
+            -- 2. Якщо дозвіл є, перевіряємо куди ми телепортуємось. 
+            -- Для TeleportAsync місце йде другим аргументом, для інших - першим.
+            local targetPlaceId = method == "TeleportAsync" and args[2] or args[1]
+            
+            -- Якщо це не головне лобі (MAIN_PLACE_ID) - БЛОКУЄМО!
             if targetPlaceId and targetPlaceId ~= MAIN_PLACE_ID then
-                print("🛑 СПРОБА ТЕЛЕПОРТУ В ІНШИЙ ПЛЕЙС ЗАБЛОКОВАНА!")
+                print("🛑 ТЕЛЕПОРТ ЗАБЛОКОВАНО! (Спроба втекти в інший плейс: " .. tostring(targetPlaceId) .. ")")
                 return nil
             end
         end
 
+        -- БЛОКУВАННЯ АНТИЧІТУ SLAP BATTLES
         if method == "FireServer" or method == "InvokeServer" then
             if self.Name == "Kicker" or self.Name == "Ban" or self.Name == "LogTunnel" or self.Name == "ModerationRemote" then
                 return nil 
@@ -131,8 +142,7 @@ end
 
 LoadSettings()
 
--- 7. ГЛОБАЛЬНИЙ СЛУХАЧ СЛАПІВ (Новинка)
--- Він постійно слухає сервер. Як тільки сервер нарахує слапи (навіть з затримкою), він одразу їх додає в лічильник!
+-- 7. ГЛОБАЛЬНИЙ СЛУХАЧ СЛАПІВ
 task.spawn(function()
     local leaderstats = Players.LocalPlayer:WaitForChild("leaderstats")
     local slapsStat = leaderstats:WaitForChild("Slaps")
@@ -170,7 +180,7 @@ local function SetNoclip(state)
     end
 end
 
--- 8. АГРЕСИВНЕ БЛОКУВАННЯ БРАЗИЛІЇ
+-- 8. АГРЕСИВНЕ БЛОКУВАННЯ БРАЗИЛІЇ (Видалення порталу)
 local function DisableBrazilPortal()
     pcall(function()
         local lobby = workspace:FindFirstChild("Lobby")
@@ -527,6 +537,8 @@ local BypassTab = Window:MakeTab({
 
 BypassTab:AddLabel("Anti-Cheat Bypass: ✅ ACTIVE")
 BypassTab:AddParagraph("Знищення клієнтських скриптів", "Скрипт видалив Anti-offset, Antidream, AntiMobileExploits та CodeDetector.")
+BypassTab:AddLabel("Anti-Teleport: ✅ ACTIVE")
+BypassTab:AddParagraph("Абсолютний захист від телепортів", "Будь-який телепорт, окрім Server Hop, блокується наглухо.")
 BypassTab:AddLabel("Anti-AFK: ✅ ACTIVE")
 
 isInitializing = false
