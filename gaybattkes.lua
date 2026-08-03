@@ -311,9 +311,16 @@ local function GetSlappleTouchPart(slapple)
     return nil
 end
 
+-- 10. Збір яблук і ПІДРАХУНОК РЕАЛЬНИХ СЛАПІВ
 local function CollectAllSlapplesRemote()
     local char = Players.LocalPlayer.Character
-    local collectedCount = 0
+    local leaderstats = Players.LocalPlayer:FindFirstChild("leaderstats")
+    local startSlaps = 0
+    if leaderstats and leaderstats:FindFirstChild("Slaps") then
+        startSlaps = leaderstats.Slaps.Value
+    end
+
+    local appleCount = 0
 
     if char and char:FindFirstChild("HumanoidRootPart") and char:FindFirstChild("entered") then 
         local hrp = char.HumanoidRootPart
@@ -348,17 +355,30 @@ local function CollectAllSlapplesRemote()
                             task.wait(0.01) 
                             firetouchinterest(hrp, targetPart, 1) 
                         end)
-                        collectedCount = collectedCount + 1 
+                        appleCount = appleCount + 1 
                         task.wait(0.01) 
                     end
                 end 
             end
         end 
     end 
-    return collectedCount
+    
+    -- Рахуємо, скільки РЕАЛЬНИХ слапів нам дали за ці яблука
+    local endSlaps = 0
+    if leaderstats and leaderstats:FindFirstChild("Slaps") then
+        endSlaps = leaderstats.Slaps.Value
+    end
+    local gainedSlaps = endSlaps - startSlaps
+    
+    if gainedSlaps > 0 then
+        _G.TotalSlapsFarmed = _G.TotalSlapsFarmed + gainedSlaps
+        SaveSettings()
+    end
+    
+    return gainedSlaps
 end
 
--- 10. Інтерфейс
+-- 11. Інтерфейс
 local Window = OrionLib:MakeWindow({
     Name = "Slapple Collector Hub 👏",
     IntroText = "Instant Start",
@@ -375,12 +395,18 @@ local Tab = Window:MakeTab({
     PremiumOnly = false
 })
 
--- ЛІЧИЛЬНИК В ІНТЕРФЕЙСІ
+-- ЛІЧИЛЬНИКИ В ІНТЕРФЕЙСІ
 local StatLabel = Tab:AddLabel("Всього нафармовано: " .. tostring(_G.TotalSlapsFarmed) .. " слапів")
+local RealSlapsLabel = Tab:AddLabel("Зараз на акаунті: 0 слапів")
 
+-- ОНОВЛЕННЯ ЛІЧИЛЬНИКІВ КОЖНУ СЕКУНДУ
 task.spawn(function()
     while task.wait(1) do
         pcall(function()
+            local ls = Players.LocalPlayer:FindFirstChild("leaderstats")
+            if ls and ls:FindFirstChild("Slaps") then
+                RealSlapsLabel:Set("Зараз на акаунті: " .. tostring(ls.Slaps.Value) .. " слапів")
+            end
             StatLabel:Set("Всього нафармовано: " .. tostring(_G.TotalSlapsFarmed) .. " слапів")
         end)
     end
@@ -405,19 +431,13 @@ Tab:AddToggle({
                     end 
 
                     if char and char:FindFirstChild("entered") then
-                        local collectedCount = CollectAllSlapplesRemote()
-
-                        -- ОНОВЛЕННЯ ЛІЧИЛЬНИКА
-                        if collectedCount > 0 then
-                            _G.TotalSlapsFarmed = _G.TotalSlapsFarmed + collectedCount
-                            SaveSettings()
-                        end
+                        local gainedSlaps = CollectAllSlapplesRemote()
 
                         pcall(function()
-                            if collectedCount > 0 then
+                            if gainedSlaps > 0 then
                                 OrionLib:MakeNotification({ 
                                     Name = "Slapple Farm 🍏", 
-                                    Content = "Залутано усе! Зібрано: " .. tostring(collectedCount) .. " слапів! Перехід...", 
+                                    Content = "Отримано: +" .. tostring(gainedSlaps) .. " слапів! Перехід...", 
                                     Image = "rbxassetid://7734053426", 
                                     Time = 2 
                                 }) 
@@ -477,7 +497,6 @@ Tab:AddButton({
     end
 })
 
--- КНОПКА ДЛЯ СКИДАННЯ ЛІЧИЛЬНИКА
 Tab:AddButton({
     Name = "Скинути лічильник",
     Callback = function()
