@@ -6,14 +6,21 @@ local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local VirtualUser = game:GetService("VirtualUser")
 
--- ОНОВЛЕНЕ ПОСИЛАННЯ З .lua
+local MAIN_PLACE_ID = 6403373529 
 local GITHUB_RAW_URL = "https://raw.githubusercontent.com/markiyanbest/slap/main/gaybattkes.lua"
 local ConfigFile = "SlappleFarm_Settings.json"
 local isInitializing = true
 local noclipConnection = nil
 
-local serverStartTime = tick()
+-- АНТИ-БРАЗИЛІЯ: Перевірка ID при запуску
+if game.PlaceId ~= MAIN_PLACE_ID then
+    print("⚠️ ВІДНАЙДЕНО БРАЗИЛІЮ! ПОВЕРТАЄМОСЯ В ОСНОВНУ ГРУ...")
+    _G.AllowTeleport = true
+    pcall(function() TeleportService:Teleport(MAIN_PLACE_ID, Players.LocalPlayer) end)
+    return 
+end
 
+local serverStartTime = tick()
 _G.AllowTeleport = false
 _G.IsHopping = false
 
@@ -22,14 +29,23 @@ if hookmetamethod then
     local oldNamecall
     oldNamecall = hookmetamethod(game, "__namecall", newcclosure(function(self, ...)
         local method = getnamecallmethod()
+        local args = {...}
+
         if self == TeleportService and (method:find("Teleport") or method == "TeleportToPlaceInstance" or method == "TeleportAsync") then
             if not _G.AllowTeleport then return nil end
-        end
-        if method == "FireServer" or method == "InvokeServer" then
-            if self.Name == "Kicker" or self.Name == "Ban" or self.Name == "LogTunnel" or self.Name == "ModerationRemote" then
+            local targetPlaceId = args[1]
+            if targetPlaceId and targetPlaceId ~= MAIN_PLACE_ID then
+                print("🛑 СПРОБА ТЕЛЕПОРТУ В ІНШИЙ ПЛЕЙС ЗАБЛОКОВАНА!")
                 return nil
             end
         end
+
+        if method == "FireServer" or method == "InvokeServer" then
+            if self.Name == "Kicker" or self.Name == "Ban" or self.Name == "LogTunnel" or self.Name == "ModerationRemote" then
+                return nil 
+            end
+        end
+
         return oldNamecall(self, ...)
     end))
 end
@@ -135,20 +151,31 @@ local function SetNoclip(state)
     end
 end
 
--- 8. Блокування порталу Бразилії
+-- 8. АГРЕСИВНЕ БЛОКУВАННЯ БРАЗИЛІЇ (Видалення порталу)
 local function DisableBrazilPortal()
-    local lobby = workspace:FindFirstChild("Lobby")
-    if lobby then
-        local brazil = lobby:FindFirstChild("brazil")
-        if brazil then
-            for _, v in pairs(brazil:GetDescendants()) do
-                if v:IsA("BasePart") and v.CanTouch then
-                    v.CanTouch = false
+    pcall(function()
+        local lobby = workspace:FindFirstChild("Lobby")
+        if lobby then
+            local brazil = lobby:FindFirstChild("brazil")
+            if brazil then
+                for _, v in pairs(brazil:GetDescendants()) do
+                    if v:IsA("BasePart") then
+                        v.CanTouch = false
+                        v.CanCollide = false
+                        v.Transparency = 1
+                    end
                 end
+                brazil:Destroy() 
             end
         end
-    end
+    end)
 end
+
+task.spawn(function()
+    while task.wait(1) do
+        DisableBrazilPortal()
+    end
+end)
 
 local OrionLib = loadstring(game:HttpGet("https://raw.githubusercontent.com/Giangplay/Script/main/Orion_Library_PE_V2.lua"))()
 
@@ -169,7 +196,7 @@ local function DoServerHop()
         }) 
     end)
 
-    -- Діагностика Auto-Execute
+    -- Діагностика Auto-Execute (НЕ ЧІПАЮ ЦЕЙ БЛОК, ВІН ПРАЦЮЄ)
     if _G.AutoExecute then 
         local q = queue_on_teleport or queueonteleport
         if not q and getgenv then
@@ -244,9 +271,20 @@ if not _G.TeleportHooked then
     end)
 end
 
--- 11. Вхід на арену
+-- 11. НЕЗАЛЕЖНИЙ ТАЙМЕР ANTI-STUCK (Працює в фоні)
+task.spawn(function()
+    while task.wait(1) do
+        if _G.SlappleFarm and not _G.IsHopping then
+            if tick() - serverStartTime > 25 then
+                print("⚠️ МИНУЛО 25 СЕКУНД! ПРИМУСОВИЙ SERVER HOP...")
+                DoServerHop()
+            end
+        end
+    end
+end)
+
+-- 12. Вхід на арену
 local function EnterArena()
-    DisableBrazilPortal()
     local char = Players.LocalPlayer.Character
     if char and char:FindFirstChild("Head") and not char:FindFirstChild("entered") then
         local lobby = workspace:FindFirstChild("Lobby")
@@ -273,7 +311,7 @@ local function GetSlappleTouchPart(slapple)
     return nil
 end
 
--- 12. Повний збір ВСІХ яблук
+-- 13. Повний збір ВСІХ яблук
 local function CollectAllSlapplesRemote()
     local char = Players.LocalPlayer.Character
     local collectedCount = 0
@@ -321,7 +359,7 @@ local function CollectAllSlapplesRemote()
     return collectedCount
 end
 
--- 13. Інтерфейс
+-- 14. Інтерфейс
 local Window = OrionLib:MakeWindow({
     Name = "Slapple Collector Hub 👏",
     IntroText = "Instant Remote Farm + AC Destroy",
@@ -349,19 +387,6 @@ Tab:AddToggle({
         if Value then 
             task.spawn(function() 
                 while _G.SlappleFarm do 
-                    if tick() - serverStartTime > 25 then
-                        pcall(function()
-                            OrionLib:MakeNotification({ 
-                                Name = "Anti-Stuck ⏳", 
-                                Content = "Забагато часу на сервері! Примусовий Server Hop...", 
-                                Image = "rbxassetid://7734053426", 
-                                Time = 2 
-                            }) 
-                        end)
-                        DoServerHop()
-                        break
-                    end
-
                     local char = Players.LocalPlayer.Character 
                     
                     if char and not char:FindFirstChild("entered") then 
@@ -443,7 +468,7 @@ local BypassTab = Window:MakeTab({
 })
 
 BypassTab:AddLabel("Anti-Cheat Bypass: ✅ ACTIVE")
-BypassTab:AddParagraph("Знищення клієнтських скриптів", "Скрипт автоматично видалив Anti-offset, Antidream, AntiMobileExploits та CodeDetector.")
+BypassTab:AddParagraph("Знищення клієнтських скриптів", "Скрипт видалив Anti-offset, Antidream, AntiMobileExploits та CodeDetector.")
 BypassTab:AddLabel("Anti-AFK: ✅ ACTIVE")
 
 isInitializing = false
