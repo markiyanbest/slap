@@ -128,7 +128,6 @@ end
 
 LoadSettings()
 
--- 7. Ноукліп
 local function SetNoclip(state)
     if state then
         if not noclipConnection then
@@ -151,7 +150,7 @@ local function SetNoclip(state)
     end
 end
 
--- 8. АГРЕСИВНЕ БЛОКУВАННЯ БРАЗИЛІЇ
+-- 7. АГРЕСИВНЕ БЛОКУВАННЯ БРАЗИЛІЇ
 local function DisableBrazilPortal()
     pcall(function()
         local lobby = workspace:FindFirstChild("Lobby")
@@ -179,7 +178,7 @@ end)
 
 local OrionLib = loadstring(game:HttpGet("https://raw.githubusercontent.com/Giangplay/Script/main/Orion_Library_PE_V2.lua"))()
 
--- 9. Server Hop
+-- 8. Server Hop
 local function DoServerHop()
     if _G.IsHopping then return end
     _G.IsHopping = true
@@ -256,7 +255,6 @@ local function DoServerHop()
     end)
 end
 
--- 10. Відстеження помилок
 if not _G.TeleportHooked then
     _G.TeleportHooked = true
     TeleportService.TeleportInitFailed:Connect(function(player, teleportResult, errorMessage)
@@ -271,7 +269,7 @@ if not _G.TeleportHooked then
     end)
 end
 
--- 11. НЕЗАЛЕЖНИЙ ТАЙМЕР ANTI-STUCK
+-- 9. НЕЗАЛЕЖНИЙ ТАЙМЕР ANTI-STUCK
 task.spawn(function()
     while task.wait(1) do
         if _G.SlappleFarm and not _G.IsHopping then
@@ -283,14 +281,13 @@ task.spawn(function()
     end
 end)
 
--- 12. Вхід на арену (ПРИСКОРЕНО)
 local function EnterArena()
     local char = Players.LocalPlayer.Character
     if char and char:FindFirstChild("Head") and not char:FindFirstChild("entered") then
         local lobby = workspace:FindFirstChild("Lobby")
         if lobby and lobby:FindFirstChild("Teleport1") then
             firetouchinterest(char.Head, lobby.Teleport1, 0)
-            task.wait() -- Зменшено затримку
+            task.wait() 
             firetouchinterest(char.Head, lobby.Teleport1, 1)
         end
     end
@@ -311,7 +308,6 @@ local function GetSlappleTouchPart(slapple)
     return nil
 end
 
--- 13. Збір ВСІХ яблук (ПРИСКОРЕНО)
 local function CollectAllSlapplesRemote()
     local char = Players.LocalPlayer.Character
     local collectedCount = 0
@@ -334,7 +330,7 @@ local function CollectAllSlapplesRemote()
                     hrp.CFrame = safeCFrame
                     hrp.AssemblyLinearVelocity = Vector3.zero
                 end)
-                task.wait(0.1) -- Зменшено з 0.5 до 0.1
+                task.wait(0.1) 
             end
 
             for _, v in ipairs(items) do 
@@ -346,11 +342,11 @@ local function CollectAllSlapplesRemote()
                     if targetPart then
                         pcall(function()
                             firetouchinterest(hrp, targetPart, 0) 
-                            task.wait(0.01) -- Зменшено з 0.02
+                            task.wait(0.01) 
                             firetouchinterest(hrp, targetPart, 1) 
                         end)
                         collectedCount = collectedCount + 1 
-                        task.wait(0.01) -- Зменшено з 0.04 до 0.01 ( максимально швидко )
+                        task.wait(0.01) 
                     end
                 end 
             end
@@ -359,14 +355,14 @@ local function CollectAllSlapplesRemote()
     return collectedCount
 end
 
--- 14. Інтерфейс
+-- 10. Інтерфейс (БЕЗ ІНТРО АНІМАЦІЇ)
 local Window = OrionLib:MakeWindow({
     Name = "Slapple Collector Hub 👏",
-    IntroText = "Instant Remote Farm + AC Destroy",
+    IntroText = "Instant Start", -- Текст більше не відіграє ролі, бо заставки не буде
     IntroIcon = "rbxassetid://15315284749",
     HidePremium = false,
     SaveConfig = false,
-    IntroEnabled = true,
+    IntroEnabled = false, -- ВИМКНЕНО ЗАСТАВКУ! Миттєвий запуск.
     ConfigFolder = "SlappleFarmConfig"
 })
 
@@ -391,7 +387,7 @@ Tab:AddToggle({
                     
                     if char and not char:FindFirstChild("entered") then 
                         EnterArena() 
-                        task.wait(0.5) -- Зменшено з 1 до 0.5
+                        task.wait(0.5) 
                     end 
 
                     if char and char:FindFirstChild("entered") then
@@ -415,12 +411,12 @@ Tab:AddToggle({
                             end
                         end)
 
-                        task.wait(0.2) -- Зменшено з 0.5 до 0.2
+                        task.wait(0.2) 
                         DoServerHop()
                         break 
                     end
                     
-                    task.wait(0.2) -- Зменшено з 0.5 до 0.2
+                    task.wait(0.2) 
                 end 
             end) 
         end 
