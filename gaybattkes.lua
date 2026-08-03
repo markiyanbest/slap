@@ -93,7 +93,7 @@ if not safePlatform then
     safePlatform.Parent = workspace
 end
 
--- 5. Завантаження налаштувань (ДОДАНО ЛІЧИЛЬНИК)
+-- 5. Завантаження налаштувань
 local function LoadSettings()
     if isfile and readfile and isfile(ConfigFile) then
         local success, result = pcall(function() return HttpService:JSONDecode(readfile(ConfigFile)) end)
@@ -102,7 +102,7 @@ local function LoadSettings()
             _G.AutoEnterArena = result.AutoEnterArena or false
             _G.ServerHopWhenEmpty = result.ServerHopWhenEmpty or false
             _G.AutoExecute = (result.AutoExecute ~= nil) and result.AutoExecute or true
-            _G.TotalSlapsFarmed = result.TotalSlapsFarmed or 0 -- ЗАВАНТАЖЕННЯ ЛІЧИЛЬНИКА
+            _G.TotalSlapsFarmed = result.TotalSlapsFarmed or 0
             return
         end
     end
@@ -110,10 +110,10 @@ local function LoadSettings()
     _G.AutoEnterArena = false
     _G.ServerHopWhenEmpty = true
     _G.AutoExecute = true
-    _G.TotalSlapsFarmed = 0 -- ЗАВАНТАЖЕННЯ ЗА ЗАМОВЧУВАННЯМ
+    _G.TotalSlapsFarmed = 0
 end
 
--- 6. Збереження налаштувань (ДОДАНО ЛІЧИЛЬНИК)
+-- 6. Збереження налаштувань
 local function SaveSettings()
     if isInitializing then return end
     if writefile then
@@ -123,7 +123,7 @@ local function SaveSettings()
                 AutoEnterArena = _G.AutoEnterArena,
                 ServerHopWhenEmpty = _G.ServerHopWhenEmpty,
                 AutoExecute = _G.AutoExecute,
-                TotalSlapsFarmed = _G.TotalSlapsFarmed -- ЗБЕРЕЖЕННЯ ЛІЧИЛЬНИКА
+                TotalSlapsFarmed = _G.TotalSlapsFarmed
             }))
         end)
     end
@@ -375,8 +375,16 @@ local Tab = Window:MakeTab({
     PremiumOnly = false
 })
 
--- ЛІЧИЛЬНИК В ІНТЕРФЕЙСІ
+-- ЛІЧИЛЬНИК В ІНТЕРФЕЙСІ (ОНОВЛЮЄТЬСЯ КОЖНУ СЕКУНДУ)
 local StatLabel = Tab:AddLabel("Всього нафармовано: " .. tostring(_G.TotalSlapsFarmed) .. " слапів")
+
+task.spawn(function()
+    while task.wait(1) do
+        pcall(function()
+            StatLabel:Set("Всього нафармовано: " .. tostring(_G.TotalSlapsFarmed) .. " слапів")
+        end)
+    end
+end)
 
 Tab:AddToggle({
     Name = "Autofarm Slapples (Без ТП + Hop)",
@@ -403,9 +411,6 @@ Tab:AddToggle({
                         if collectedCount > 0 then
                             _G.TotalSlapsFarmed = _G.TotalSlapsFarmed + collectedCount
                             SaveSettings()
-                            pcall(function()
-                                StatLabel:Set("Всього нафармовано: " .. tostring(_G.TotalSlapsFarmed) .. " слапів")
-                            end)
                         end
 
                         pcall(function()
