@@ -12,7 +12,7 @@ local ConfigFile = "SlappleFarm_Settings.json"
 local isInitializing = true
 local noclipConnection = nil
 
--- АНТИ-БРАЗИЛІЯ: Перевірка ID при запуску
+-- АНТИ-БРАЗИЛІЯ
 if game.PlaceId ~= MAIN_PLACE_ID then
     print("⚠️ ВІДНАЙДЕНО БРАЗИЛІЮ! ПОВЕРТАЄМОСЯ В ОСНОВНУ ГРУ...")
     _G.AllowTeleport = true
@@ -93,7 +93,7 @@ if not safePlatform then
     safePlatform.Parent = workspace
 end
 
--- 5. Завантаження налаштувань
+-- 5. Завантаження налаштувань (ДОДАНО ЛІЧИЛЬНИК)
 local function LoadSettings()
     if isfile and readfile and isfile(ConfigFile) then
         local success, result = pcall(function() return HttpService:JSONDecode(readfile(ConfigFile)) end)
@@ -102,6 +102,7 @@ local function LoadSettings()
             _G.AutoEnterArena = result.AutoEnterArena or false
             _G.ServerHopWhenEmpty = result.ServerHopWhenEmpty or false
             _G.AutoExecute = (result.AutoExecute ~= nil) and result.AutoExecute or true
+            _G.TotalSlapsFarmed = result.TotalSlapsFarmed or 0 -- ЗАВАНТАЖЕННЯ ЛІЧИЛЬНИКА
             return
         end
     end
@@ -109,9 +110,10 @@ local function LoadSettings()
     _G.AutoEnterArena = false
     _G.ServerHopWhenEmpty = true
     _G.AutoExecute = true
+    _G.TotalSlapsFarmed = 0 -- ЗАВАНТАЖЕННЯ ЗА ЗАМОВЧУВАННЯМ
 end
 
--- 6. Збереження налаштувань
+-- 6. Збереження налаштувань (ДОДАНО ЛІЧИЛЬНИК)
 local function SaveSettings()
     if isInitializing then return end
     if writefile then
@@ -120,7 +122,8 @@ local function SaveSettings()
                 SlappleFarm = _G.SlappleFarm,
                 AutoEnterArena = _G.AutoEnterArena,
                 ServerHopWhenEmpty = _G.ServerHopWhenEmpty,
-                AutoExecute = _G.AutoExecute
+                AutoExecute = _G.AutoExecute,
+                TotalSlapsFarmed = _G.TotalSlapsFarmed -- ЗБЕРЕЖЕННЯ ЛІЧИЛЬНИКА
             }))
         end)
     end
@@ -355,14 +358,14 @@ local function CollectAllSlapplesRemote()
     return collectedCount
 end
 
--- 10. Інтерфейс (БЕЗ ІНТРО АНІМАЦІЇ)
+-- 10. Інтерфейс
 local Window = OrionLib:MakeWindow({
     Name = "Slapple Collector Hub 👏",
-    IntroText = "Instant Start", -- Текст більше не відіграє ролі, бо заставки не буде
+    IntroText = "Instant Start",
     IntroIcon = "rbxassetid://15315284749",
     HidePremium = false,
     SaveConfig = false,
-    IntroEnabled = false, -- ВИМКНЕНО ЗАСТАВКУ! Миттєвий запуск.
+    IntroEnabled = false, 
     ConfigFolder = "SlappleFarmConfig"
 })
 
@@ -371,6 +374,9 @@ local Tab = Window:MakeTab({
     Icon = "rbxassetid://7733673987",
     PremiumOnly = false
 })
+
+-- ЛІЧИЛЬНИК В ІНТЕРФЕЙСІ
+local StatLabel = Tab:AddLabel("Всього нафармовано: " .. tostring(_G.TotalSlapsFarmed) .. " слапів")
 
 Tab:AddToggle({
     Name = "Autofarm Slapples (Без ТП + Hop)",
@@ -392,6 +398,15 @@ Tab:AddToggle({
 
                     if char and char:FindFirstChild("entered") then
                         local collectedCount = CollectAllSlapplesRemote()
+
+                        -- ОНОВЛЕННЯ ЛІЧИЛЬНИКА
+                        if collectedCount > 0 then
+                            _G.TotalSlapsFarmed = _G.TotalSlapsFarmed + collectedCount
+                            SaveSettings()
+                            pcall(function()
+                                StatLabel:Set("Всього нафармовано: " .. tostring(_G.TotalSlapsFarmed) .. " слапів")
+                            end)
+                        end
 
                         pcall(function()
                             if collectedCount > 0 then
@@ -454,6 +469,24 @@ Tab:AddButton({
     Name = "Ручний Server Hop",
     Callback = function()
         DoServerHop()
+    end
+})
+
+-- КНОПКА ДЛЯ СКИДАННЯ ЛІЧИЛЬНИКА
+Tab:AddButton({
+    Name = "Скинути лічильник",
+    Callback = function()
+        _G.TotalSlapsFarmed = 0
+        SaveSettings()
+        pcall(function()
+            StatLabel:Set("Всього нафармовано: 0 слапів")
+        end)
+        OrionLib:MakeNotification({
+            Name = "Статистика 🧹",
+            Content = "Лічильник успішно скинуто!",
+            Image = "rbxassetid://7734053426",
+            Time = 2
+        })
     end
 })
 
