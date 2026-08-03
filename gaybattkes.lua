@@ -131,6 +131,23 @@ end
 
 LoadSettings()
 
+-- 7. ГЛОБАЛЬНИЙ СЛУХАЧ СЛАПІВ (Новинка)
+-- Він постійно слухає сервер. Як тільки сервер нарахує слапи (навіть з затримкою), він одразу їх додає в лічильник!
+task.spawn(function()
+    local leaderstats = Players.LocalPlayer:WaitForChild("leaderstats")
+    local slapsStat = leaderstats:WaitForChild("Slaps")
+    local lastVal = slapsStat.Value
+    
+    slapsStat.Changed:Connect(function(newVal)
+        if newVal > lastVal then
+            local diff = newVal - lastVal
+            _G.TotalSlapsFarmed = _G.TotalSlapsFarmed + diff
+            SaveSettings()
+        end
+        lastVal = newVal
+    end)
+end)
+
 local function SetNoclip(state)
     if state then
         if not noclipConnection then
@@ -153,7 +170,7 @@ local function SetNoclip(state)
     end
 end
 
--- 7. АГРЕСИВНЕ БЛОКУВАННЯ БРАЗИЛІЇ
+-- 8. АГРЕСИВНЕ БЛОКУВАННЯ БРАЗИЛІЇ
 local function DisableBrazilPortal()
     pcall(function()
         local lobby = workspace:FindFirstChild("Lobby")
@@ -181,7 +198,7 @@ end)
 
 local OrionLib = loadstring(game:HttpGet("https://raw.githubusercontent.com/Giangplay/Script/main/Orion_Library_PE_V2.lua"))()
 
--- 8. Server Hop
+-- 9. Server Hop
 local function DoServerHop()
     if _G.IsHopping then return end
     _G.IsHopping = true
@@ -272,7 +289,7 @@ if not _G.TeleportHooked then
     end)
 end
 
--- 9. НЕЗАЛЕЖНИЙ ТАЙМЕР ANTI-STUCK
+-- 10. НЕЗАЛЕЖНИЙ ТАЙМЕР ANTI-STUCK
 task.spawn(function()
     while task.wait(1) do
         if _G.SlappleFarm and not _G.IsHopping then
@@ -311,12 +328,11 @@ local function GetSlappleTouchPart(slapple)
     return nil
 end
 
--- 10. Збір яблук і ПІДРАХУНОК РЕАЛЬНИХ СЛАПІВ
+-- 11. Збір яблук
 local function CollectAllSlapplesRemote()
     local char = Players.LocalPlayer.Character
     local leaderstats = Players.LocalPlayer:FindFirstChild("leaderstats")
     
-    -- Запам'ятовуємо, скільки слапів було ДО збору
     local startSlaps = 0
     if leaderstats and leaderstats:FindFirstChild("Slaps") then
         startSlaps = leaderstats.Slaps.Value
@@ -362,24 +378,18 @@ local function CollectAllSlapplesRemote()
         end 
     end 
     
-    -- Перевіряємо, скільки слапів стало ПІСЛЯ збору
+    -- ДАЄМО СЕРВЕРУ ЦІЛИХ 2 СЕКУНДИ, щоб 100% нарахувати слапи
+    task.wait(2)
+    
     local endSlaps = 0
     if leaderstats and leaderstats:FindFirstChild("Slaps") then
         endSlaps = leaderstats.Slaps.Value
     end
     
-    -- Рахуємо різницю (це і є реальні слапи!)
-    local gainedSlaps = endSlaps - startSlaps
-    
-    if gainedSlaps > 0 then
-        _G.TotalSlapsFarmed = _G.TotalSlapsFarmed + gainedSlaps
-        SaveSettings()
-    end
-    
-    return gainedSlaps
+    return endSlaps - startSlaps
 end
 
--- 11. Інтерфейс
+-- 12. Інтерфейс
 local Window = OrionLib:MakeWindow({
     Name = "Slapple Collector Hub 👏",
     IntroText = "Instant Start",
@@ -447,7 +457,6 @@ Tab:AddToggle({
                             end
                         end)
 
-                        task.wait(0.2) 
                         DoServerHop()
                         break 
                     end
