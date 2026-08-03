@@ -315,12 +315,12 @@ end
 local function CollectAllSlapplesRemote()
     local char = Players.LocalPlayer.Character
     local leaderstats = Players.LocalPlayer:FindFirstChild("leaderstats")
+    
+    -- Запам'ятовуємо, скільки слапів було ДО збору
     local startSlaps = 0
     if leaderstats and leaderstats:FindFirstChild("Slaps") then
         startSlaps = leaderstats.Slaps.Value
     end
-
-    local appleCount = 0
 
     if char and char:FindFirstChild("HumanoidRootPart") and char:FindFirstChild("entered") then 
         local hrp = char.HumanoidRootPart
@@ -355,7 +355,6 @@ local function CollectAllSlapplesRemote()
                             task.wait(0.01) 
                             firetouchinterest(hrp, targetPart, 1) 
                         end)
-                        appleCount = appleCount + 1 
                         task.wait(0.01) 
                     end
                 end 
@@ -363,11 +362,13 @@ local function CollectAllSlapplesRemote()
         end 
     end 
     
-    -- Рахуємо, скільки РЕАЛЬНИХ слапів нам дали за ці яблука
+    -- Перевіряємо, скільки слапів стало ПІСЛЯ збору
     local endSlaps = 0
     if leaderstats and leaderstats:FindFirstChild("Slaps") then
         endSlaps = leaderstats.Slaps.Value
     end
+    
+    -- Рахуємо різницю (це і є реальні слапи!)
     local gainedSlaps = endSlaps - startSlaps
     
     if gainedSlaps > 0 then
@@ -395,19 +396,14 @@ local Tab = Window:MakeTab({
     PremiumOnly = false
 })
 
--- ЛІЧИЛЬНИКИ В ІНТЕРФЕЙСІ
-local StatLabel = Tab:AddLabel("Всього нафармовано: " .. tostring(_G.TotalSlapsFarmed) .. " слапів")
-local RealSlapsLabel = Tab:AddLabel("Зараз на акаунті: 0 слапів")
+-- ЛІЧИЛЬНИК СЛАПІВ
+local StatLabel = Tab:AddLabel("Нафармовано цим скриптом: " .. tostring(_G.TotalSlapsFarmed) .. " слапів")
 
--- ОНОВЛЕННЯ ЛІЧИЛЬНИКІВ КОЖНУ СЕКУНДУ
+-- ОНОВЛЕННЯ ЛІЧИЛЬНИКА КОЖНУ СЕКУНДУ
 task.spawn(function()
     while task.wait(1) do
         pcall(function()
-            local ls = Players.LocalPlayer:FindFirstChild("leaderstats")
-            if ls and ls:FindFirstChild("Slaps") then
-                RealSlapsLabel:Set("Зараз на акаунті: " .. tostring(ls.Slaps.Value) .. " слапів")
-            end
-            StatLabel:Set("Всього нафармовано: " .. tostring(_G.TotalSlapsFarmed) .. " слапів")
+            StatLabel:Set("Нафармовано цим скриптом: " .. tostring(_G.TotalSlapsFarmed) .. " слапів")
         end)
     end
 end)
@@ -503,7 +499,7 @@ Tab:AddButton({
         _G.TotalSlapsFarmed = 0
         SaveSettings()
         pcall(function()
-            StatLabel:Set("Всього нафармовано: 0 слапів")
+            StatLabel:Set("Нафармовано цим скриптом: 0 слапів")
         end)
         OrionLib:MakeNotification({
             Name = "Статистика 🧹",
