@@ -6,7 +6,6 @@ local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local VirtualUser = game:GetService("VirtualUser")
 
--- Головний ID гри Slap Battles (Лобі)
 local MAIN_PLACE_ID = 6403373529 
 
 local GITHUB_RAW_URL = "https://raw.githubusercontent.com/markiyanbest/slap/main/gaybattkes.lua"
@@ -14,7 +13,6 @@ local ConfigFile = "SlappleFarm_Settings.json"
 local isInitializing = true
 local noclipConnection = nil
 
--- АНТИ-БРАЗИЛІЯ: Якщо ми потрапили не в головне лобі, негайно тікаємо!
 if game.PlaceId ~= MAIN_PLACE_ID then
     print("⚠️ ВІДНАЙДЕНО БРАЗИЛІЮ! ПОВЕРТАЄМОСЯ В ОСНОВНУ ГРУ...")
     local p = Players.LocalPlayer
@@ -28,19 +26,15 @@ local serverStartTime = tick()
 _G.AllowTeleport = false
 _G.IsHopping = false
 
--- 1. МЕГА-ХУК: Абсолютний блок телепортів + Античіт
+-- 1. МЕГА-ХУК
 if hookmetamethod then
     local oldNamecall
     oldNamecall = hookmetamethod(game, "__namecall", newcclosure(function(self, ...)
         local method = getnamecallmethod()
         local args = {...}
 
-        -- Блокування сторонніх телепортів (Бразилія тощо)
         if self == TeleportService and (method == "Teleport" or method == "TeleportToPlaceInstance" or method == "TeleportAsync") then
-            if not _G.AllowTeleport then 
-                return nil 
-            end
-            
+            if not _G.AllowTeleport then return nil end
             local targetPlaceId = args[1]
             if targetPlaceId and targetPlaceId ~= MAIN_PLACE_ID then
                 print("🛑 СПРОБА ТЕЛЕПОРТУ В ІНШИЙ ПЛЕЙС ЗАБЛОКОВАНА!")
@@ -48,7 +42,6 @@ if hookmetamethod then
             end
         end
 
-        -- БЛОКУВАННЯ АНТИЧІТУ SLAP BATTLES
         if method == "FireServer" or method == "InvokeServer" then
             if self.Name == "Kicker" or self.Name == "Ban" or self.Name == "LogTunnel" or self.Name == "ModerationRemote" then
                 return nil 
@@ -102,7 +95,7 @@ if not safePlatform then
     safePlatform.Parent = workspace
 end
 
--- 5. Завантаження налаштувань (Без AutoExecute)
+-- 5. Завантаження налаштувань
 local function LoadSettings()
     if isfile and readfile and isfile(ConfigFile) then
         local success, result = pcall(function() return HttpService:JSONDecode(readfile(ConfigFile)) end)
@@ -118,7 +111,6 @@ local function LoadSettings()
     _G.ServerHopWhenEmpty = true
 end
 
--- 6. Збереження налаштувань (Без AutoExecute)
 local function SaveSettings()
     if isInitializing then return end
     if writefile then
@@ -134,7 +126,6 @@ end
 
 LoadSettings()
 
--- 7. Ноукліп
 local function SetNoclip(state)
     if state then
         if not noclipConnection then
@@ -157,7 +148,6 @@ local function SetNoclip(state)
     end
 end
 
--- 8. АГРЕСИВНЕ БЛОКУВАННЯ БРАЗИЛІЇ (Видалення порталу)
 local function DisableBrazilPortal()
     pcall(function()
         local lobby = workspace:FindFirstChild("Lobby")
@@ -183,9 +173,19 @@ task.spawn(function()
     end
 end)
 
-local OrionLib = loadstring(game:HttpGet("https://raw.githubusercontent.com/Giangplay/Script/main/Orion_Library_PE_V2.lua"))()
+-- Виправлення помилки Orion Icons
+local OrionLib
+local successOrion, errOrion = pcall(function()
+    return loadstring(game:HttpGet("https://raw.githubusercontent.com/Giangplay/Script/main/Orion_Library_PE_V2.lua"))()
+end)
+if successOrion and type(successOrion) == "table" then
+    OrionLib = successOrion
+else
+    warn("Помилка завантаження Orion: " .. tostring(errOrion))
+    OrionLib = { MakeNotification = function() end, MakeWindow = function() return { MakeTab = function() return { AddToggle = function() end, AddButton = function() end, AddLabel = function() end, AddParagraph = function() end } end } end }
+end
 
--- 9. Server Hop
+-- 6. Server Hop
 local function DoServerHop()
     if _G.IsHopping then return end
     _G.IsHopping = true
@@ -202,19 +202,38 @@ local function DoServerHop()
         }) 
     end)
 
-    -- AUTO-EXECUTE ЗАВЖДИ ВВІМКНЕНО ЖОРСТКО
+    -- РОЗШИРЕНА ДІАГНОСТИКА AUTO-EXECUTE
     local q = queue_on_teleport or queueonteleport
     if not q and getgenv then
         q = getgenv().queue_on_teleport or getgenv().queueonteleport
     end
     
     if q then 
-        local execCode = 'repeat task.wait() until game:IsLoaded(); loadstring(game:HttpGet("' .. GITHUB_RAW_URL .. '"))()'
+        -- Код тепер перевіряє, чи завантажився файл, і пише точну причину, якщо ні
+        local execCode = [[
+            repeat task.wait() until game:IsLoaded()
+            local success, response = pcall(function()
+                return game:HttpGet("]] .. GITHUB_RAW_URL .. [[")
+            end)
+            if success and response then
+                local execFunc, loadErr = loadstring(response)
+                if execFunc then
+                    execFunc()
+                    print("✅ СКРИПТ УСПІШНО ВІДНОВЛЕНО ЧЕРЕЗ GITHUB!")
+                else
+                    warn("❌ AUTO-EXEC: Файл завантажено, але це не LUA код! Помилка: " .. tostring(loadErr))
+                    warn("📋 ОТРИМАНИЙ ТЕКСТ: " .. string.sub(response, 1, 100))
+                end
+            else
+                warn("❌ AUTO-EXEC: Не вдалося завантажити посилання! Перевір URL на GitHub. Помилка: " .. tostring(response))
+            end
+        ]]
+        
         local success, err = pcall(function() 
             q(execCode)
         end)
         if not success then
-            warn("❌ ПОМИЛКА AUTO-EXECUTE: " .. tostring(err))
+            warn("❌ ПОМИЛКА queue_on_teleport: " .. tostring(err))
         else
             print("✅ AUTO-EXECUTE успішно заплановано!")
         end
@@ -257,7 +276,6 @@ local function DoServerHop()
     end)
 end
 
--- 10. Відстеження помилок
 if not _G.TeleportHooked then
     _G.TeleportHooked = true
     TeleportService.TeleportInitFailed:Connect(function(player, teleportResult, errorMessage)
@@ -272,7 +290,6 @@ if not _G.TeleportHooked then
     end)
 end
 
--- 11. НЕЗАЛЕЖНИЙ ТАЙМЕР ANTI-STUCK (Працює в фоні)
 task.spawn(function()
     while task.wait(1) do
         if _G.SlappleFarm and not _G.IsHopping then
@@ -284,7 +301,6 @@ task.spawn(function()
     end
 end)
 
--- 12. Вхід на арену
 local function EnterArena()
     local char = Players.LocalPlayer.Character
     if char and char:FindFirstChild("Head") and not char:FindFirstChild("entered") then
@@ -312,7 +328,6 @@ local function GetSlappleTouchPart(slapple)
     return nil
 end
 
--- 13. Збір ВСІХ яблук
 local function CollectAllSlapplesRemote()
     local char = Players.LocalPlayer.Character
     local collectedCount = 0
@@ -360,7 +375,6 @@ local function CollectAllSlapplesRemote()
     return collectedCount
 end
 
--- 14. Інтерфейс
 local Window = OrionLib:MakeWindow({
     Name = "Slapple Collector Hub 👏",
     IntroText = "Instant Remote Farm + AC Destroy",
@@ -461,7 +475,7 @@ local BypassTab = Window:MakeTab({
 
 BypassTab:AddLabel("Anti-Cheat Bypass: ✅ ACTIVE")
 BypassTab:AddParagraph("Знищення клієнтських скриптів", "Скрипт видалив Anti-offset, Antidream, AntiMobileExploits, CodeDetector та Бразилію.")
-BypassTab:AddLabel("Auto-Execute: ✅ ALWAYS ACTIVE")
-BypassTab:AddParagraph("Авто-екзекьют", "Він тепер працює завжди в примусовому режимі. Не забудь увімкнути 'Auto Execute' в налаштуваннях самого експлойтера!")
+BypassTab:AddLabel("Anti-Teleport: ✅ ACTIVE")
+BypassTab:AddParagraph("Блокування сторонніх телепортів", "Скрипт блокує ВСІ телепорти, окрім власного Server Hop на головне лобі.")
 
 isInitializing = false
