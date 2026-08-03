@@ -37,13 +37,10 @@ if hookmetamethod then
 
         -- Блокування сторонніх телепортів (Бразилія тощо)
         if self == TeleportService and (method == "Teleport" or method == "TeleportToPlaceInstance" or method == "TeleportAsync") then
-            -- Якщо скрипт не дав дозвіл на хоп, блокуємо
             if not _G.AllowTeleport then 
                 return nil 
             end
             
-            -- Навіть якщо дозвіл є, перевіряємо куди ми телепортуємось. 
-            -- Якщо це не головне лобі (MAIN_PLACE_ID) - блокуємо!
             local targetPlaceId = args[1]
             if targetPlaceId and targetPlaceId ~= MAIN_PLACE_ID then
                 print("🛑 СПРОБА ТЕЛЕПОРТУ В ІНШИЙ ПЛЕЙС ЗАБЛОКОВАНА!")
@@ -105,7 +102,7 @@ if not safePlatform then
     safePlatform.Parent = workspace
 end
 
--- 5. Завантаження налаштувань
+-- 5. Завантаження налаштувань (Без AutoExecute)
 local function LoadSettings()
     if isfile and readfile and isfile(ConfigFile) then
         local success, result = pcall(function() return HttpService:JSONDecode(readfile(ConfigFile)) end)
@@ -113,17 +110,15 @@ local function LoadSettings()
             _G.SlappleFarm = result.SlappleFarm or false
             _G.AutoEnterArena = result.AutoEnterArena or false
             _G.ServerHopWhenEmpty = result.ServerHopWhenEmpty or false
-            _G.AutoExecute = (result.AutoExecute ~= nil) and result.AutoExecute or true
             return
         end
     end
     _G.SlappleFarm = false
     _G.AutoEnterArena = false
     _G.ServerHopWhenEmpty = true
-    _G.AutoExecute = true
 end
 
--- 6. Збереження налаштувань
+-- 6. Збереження налаштувань (Без AutoExecute)
 local function SaveSettings()
     if isInitializing then return end
     if writefile then
@@ -131,8 +126,7 @@ local function SaveSettings()
             writefile(ConfigFile, HttpService:JSONEncode({
                 SlappleFarm = _G.SlappleFarm,
                 AutoEnterArena = _G.AutoEnterArena,
-                ServerHopWhenEmpty = _G.ServerHopWhenEmpty,
-                AutoExecute = _G.AutoExecute
+                ServerHopWhenEmpty = _G.ServerHopWhenEmpty
             }))
         end)
     end
@@ -208,27 +202,24 @@ local function DoServerHop()
         }) 
     end)
 
-    if _G.AutoExecute then 
-        local q = queue_on_teleport or queueonteleport
-        if not q and getgenv then
-            q = getgenv().queue_on_teleport or getgenv().queueonteleport
-        end
-        
-        if q then 
-            local execCode = 'repeat task.wait() until game:IsLoaded(); loadstring(game:HttpGet("' .. GITHUB_RAW_URL .. '"))()'
-            local success, err = pcall(function() 
-                q(execCode)
-            end)
-            if not success then
-                warn("❌ ПОМИЛКА AUTO-EXECUTE: " .. tostring(err))
-            else
-                print("✅ AUTO-EXECUTE успішно заплановано!")
-            end
+    -- AUTO-EXECUTE ЗАВЖДИ ВВІМКНЕНО ЖОРСТКО
+    local q = queue_on_teleport or queueonteleport
+    if not q and getgenv then
+        q = getgenv().queue_on_teleport or getgenv().queueonteleport
+    end
+    
+    if q then 
+        local execCode = 'repeat task.wait() until game:IsLoaded(); loadstring(game:HttpGet("' .. GITHUB_RAW_URL .. '"))()'
+        local success, err = pcall(function() 
+            q(execCode)
+        end)
+        if not success then
+            warn("❌ ПОМИЛКА AUTO-EXECUTE: " .. tostring(err))
         else
-            warn("⚠️ КРИТИЧНА ПОМИЛКА: Твій експлойтер НЕ підтримує queue_on_teleport!")
-        end 
+            print("✅ AUTO-EXECUTE успішно заплановано!")
+        end
     else
-        warn("⚠️ Авто-екзекьют вимкнено в налаштуваннях.")
+        warn("⚠️ КРИТИЧНА ПОМИЛКА: Твій експлойтер НЕ підтримує queue_on_teleport!")
     end 
 
     local jobId = game.JobId 
@@ -455,15 +446,6 @@ Tab:AddToggle({
     end 
 })
 
-Tab:AddToggle({
-    Name = "Auto-Execute (Автозбереження)",
-    Default = _G.AutoExecute,
-    Callback = function(Value)
-        _G.AutoExecute = Value
-        SaveSettings()
-    end
-})
-
 Tab:AddButton({
     Name = "Ручний Server Hop",
     Callback = function()
@@ -479,7 +461,7 @@ local BypassTab = Window:MakeTab({
 
 BypassTab:AddLabel("Anti-Cheat Bypass: ✅ ACTIVE")
 BypassTab:AddParagraph("Знищення клієнтських скриптів", "Скрипт видалив Anti-offset, Antidream, AntiMobileExploits, CodeDetector та Бразилію.")
-BypassTab:AddLabel("Anti-Teleport: ✅ ACTIVE")
-BypassTab:AddParagraph("Блокування сторонніх телепортів", "Скрипт блокує ВСІ телепорти, окрім власного Server Hop на головне лобі.")
+BypassTab:AddLabel("Auto-Execute: ✅ ALWAYS ACTIVE")
+BypassTab:AddParagraph("Авто-екзекьют", "Він тепер працює завжди в примусовому режимі. Не забудь увімкнути 'Auto Execute' в налаштуваннях самого експлойтера!")
 
 isInitializing = false
