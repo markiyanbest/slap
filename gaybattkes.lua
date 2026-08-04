@@ -12,7 +12,7 @@ local ConfigFile = "SlappleFarm_Settings.json"
 local isInitializing = true
 local noclipConnection = nil
 
--- АНТИ-БРАЗИЛІЯ
+-- АНТИ-БРАЗИЛІЯ: Перевірка ID при запуску
 if game.PlaceId ~= MAIN_PLACE_ID then
     print("⚠️ ВІДНАЙДЕНО БРАЗИЛІЮ! ПОВЕРТАЄМОСЯ В ОСНОВНУ ГРУ...")
     _G.AllowTeleport = true
@@ -24,22 +24,31 @@ local serverStartTime = tick()
 _G.AllowTeleport = false
 _G.IsHopping = false
 
--- 1. МЕГА-ХУК
+-- 1. МЕГА-ХУК: Абсолютний блок телепортів + Античіт
 if hookmetamethod then
     local oldNamecall
     oldNamecall = hookmetamethod(game, "__namecall", newcclosure(function(self, ...)
         local method = getnamecallmethod()
         local args = {...}
 
+        -- АБСОЛЮТНИЙ ЗАХИСТ ВІД ТЕЛЕПОРТІВ
         if self == TeleportService and (method == "Teleport" or method == "TeleportToPlaceInstance" or method == "TeleportAsync") then
-            if not _G.AllowTeleport then return nil end
+            -- 1. Якщо скрипт не дав дозвіл на хоп -> БЛОКУЄМО
+            if not _G.AllowTeleport then 
+                return nil 
+            end
+            
+            -- 2. Якщо дозвіл є, перевіряємо куди ми телепортуємось. 
             local targetPlaceId = method == "TeleportAsync" and args[2] or args[1]
+            
+            -- Якщо це не головне лобі (MAIN_PLACE_ID) - БЛОКУЄМО!
             if targetPlaceId and targetPlaceId ~= MAIN_PLACE_ID then
                 print("🛑 ТЕЛЕПОРТ ЗАБЛОКОВАНО! (Спроба втекти в інший плейс)")
                 return nil
             end
         end
 
+        -- БЛОКУВАННЯ АНТИЧІТУ SLAP BATTLES
         if method == "FireServer" or method == "InvokeServer" then
             if self.Name == "Kicker" or self.Name == "Ban" or self.Name == "LogTunnel" or self.Name == "ModerationRemote" then
                 return nil 
@@ -153,7 +162,7 @@ local function SetNoclip(state)
     end
 end
 
--- 7. АГРЕСИВНЕ БЛОКУВАННЯ БРАЗИЛІЇ
+-- 7. АГРЕСИВНЕ БЛОКУВАННЯ БРАЗИЛІЇ (Видалення порталу)
 local function DisableBrazilPortal()
     pcall(function()
         local lobby = workspace:FindFirstChild("Lobby")
@@ -181,7 +190,7 @@ end)
 
 local OrionLib = loadstring(game:HttpGet("https://raw.githubusercontent.com/Giangplay/Script/main/Orion_Library_PE_V2.lua"))()
 
--- 8. Server Hop (ТЕПЕР ШУКАЄ НАЙПОРОЖНІШІ СЕРВЕРИ)
+-- 8. Server Hop
 local function DoServerHop()
     if _G.IsHopping then return end
     _G.IsHopping = true
@@ -275,17 +284,14 @@ if not _G.TeleportHooked then
     end)
 end
 
--- 9. АБСОЛЮТНИЙ ТАЙМЕР ANTI-STUCK
+-- 9. АБСОЛЮТНИЙ ТАЙМЕР ANTI-STUCK (20 СЕКУНД)
 task.spawn(function()
     while task.wait(1) do
-        if _G.SlappleFarm then
-            if tick() - serverStartTime > 25 then
-                print("⚠️ МИНУЛО 25 СЕКУНД! ПРИМУСОВИЙ СКИД ТА ХОП...")
-                _G.IsHopping = false
-                _G.AllowTeleport = false
-                task.wait(0.2)
+        -- Працює тільки якщо авто-фарм увімкнений і ми зараз не в процесі хопа
+        if _G.SlappleFarm and not _G.IsHopping then
+            if tick() - serverStartTime > 20 then
+                print("⚠️ МИНУЛО 20 СЕКУНД! ПРИМУСОВИЙ ХОП...")
                 DoServerHop()
-                serverStartTime = tick() 
             end
         end
     end
@@ -318,7 +324,7 @@ local function GetSlappleTouchPart(slapple)
     return nil
 end
 
--- 10. Збір яблук (ЗІ ШВИДКІСТЮ І СИНХРОНІЗАЦІЄЮ)
+-- 10. Збір яблук 
 local function CollectAllSlapplesRemote()
     local char = Players.LocalPlayer.Character
     local leaderstats = Players.LocalPlayer:FindFirstChild("leaderstats")
@@ -368,7 +374,6 @@ local function CollectAllSlapplesRemote()
         end 
     end 
     
-    -- ДАЄМО СЕРВЕРУ 0.8 СЕКУНДИ, ЩОБ 100% НАРАХУВАТИ СЛАПИ
     task.wait(0.8)
     
     local endSlaps = 0
@@ -453,7 +458,6 @@ Tab:AddToggle({
                             end
                         end)
 
-                        -- НЕВЕЛИКА ПАУЗА ПЕРЕД ХОПОМ
                         task.wait(0.5)
                         DoServerHop()
                         break 
@@ -528,6 +532,5 @@ BypassTab:AddParagraph("Знищення клієнтських скриптів
 BypassTab:AddLabel("Anti-Teleport: ✅ ACTIVE")
 BypassTab:AddParagraph("Абсолютний захист від телепортів", "Будь-який телепорт, окрім Server Hop, блокується наглухо.")
 BypassTab:AddLabel("Anti-AFK: ✅ ACTIVE")
-BypassTab:AddParagraph("Smart Server Hop", "Скрипт шукає найпорожніші сервери, щоб збирати максимум яблук.")
 
 isInitializing = false
