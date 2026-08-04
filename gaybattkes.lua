@@ -12,7 +12,7 @@ local ConfigFile = "SlappleFarm_Settings.json"
 local isInitializing = true
 local noclipConnection = nil
 
--- АНТИ-БРАЗИЛІЯ: Перевірка ID при запуску
+-- АНТИ-БРАЗИЛІЯ
 if game.PlaceId ~= MAIN_PLACE_ID then
     print("⚠️ ВІДНАЙДЕНО БРАЗИЛІЮ! ПОВЕРТАЄМОСЯ В ОСНОВНУ ГРУ...")
     _G.AllowTeleport = true
@@ -24,31 +24,22 @@ local serverStartTime = tick()
 _G.AllowTeleport = false
 _G.IsHopping = false
 
--- 1. МЕГА-ХУК: Абсолютний блок телепортів + Античіт
+-- 1. МЕГА-ХУК
 if hookmetamethod then
     local oldNamecall
     oldNamecall = hookmetamethod(game, "__namecall", newcclosure(function(self, ...)
         local method = getnamecallmethod()
         local args = {...}
 
-        -- АБСОЛЮТНИЙ ЗАХИСТ ВІД ТЕЛЕПОРТІВ
         if self == TeleportService and (method == "Teleport" or method == "TeleportToPlaceInstance" or method == "TeleportAsync") then
-            -- 1. Якщо скрипт не дав дозвіл на хоп -> БЛОКУЄМО
-            if not _G.AllowTeleport then 
-                return nil 
-            end
-            
-            -- 2. Якщо дозвіл є, перевіряємо куди ми телепортуємось. 
+            if not _G.AllowTeleport then return nil end
             local targetPlaceId = method == "TeleportAsync" and args[2] or args[1]
-            
-            -- Якщо це не головне лобі (MAIN_PLACE_ID) - БЛОКУЄМО!
             if targetPlaceId and targetPlaceId ~= MAIN_PLACE_ID then
                 print("🛑 ТЕЛЕПОРТ ЗАБЛОКОВАНО! (Спроба втекти в інший плейс)")
                 return nil
             end
         end
 
-        -- БЛОКУВАННЯ АНТИЧІТУ SLAP BATTLES
         if method == "FireServer" or method == "InvokeServer" then
             if self.Name == "Kicker" or self.Name == "Ban" or self.Name == "LogTunnel" or self.Name == "ModerationRemote" then
                 return nil 
@@ -162,7 +153,7 @@ local function SetNoclip(state)
     end
 end
 
--- 7. АГРЕСИВНЕ БЛОКУВАННЯ БРАЗИЛІЇ (Видалення порталу)
+-- 7. АГРЕСИВНЕ БЛОКУВАННЯ БРАЗИЛІЇ
 local function DisableBrazilPortal()
     pcall(function()
         local lobby = workspace:FindFirstChild("Lobby")
@@ -235,7 +226,6 @@ local function DoServerHop()
     local jobId = game.JobId 
     local targetServerId = nil 
 
-    -- ЗАВЖДИ СОРТУЄМО ВІД НАЙМЕНШОГО КІЛЬКОСТІ ГРАВЦІВ (Asc)
     local success, response = pcall(function() 
         return game:HttpGet("https://games.roblox.com/v1/games/" .. tostring(placeId) .. "/servers/Public?sortOrder=Asc&limit=100") 
     end) 
@@ -250,7 +240,6 @@ local function DoServerHop()
                 end 
             end 
             if #validServers > 0 then 
-                -- ВИБИРАЄМО ВИПАДКОВИЙ СЕРВЕР З ПЕРШИХ 5 НАЙПОРОЖНІШИХ
                 local maxChoices = math.min(5, #validServers)
                 targetServerId = validServers[math.random(1, maxChoices)] 
             end 
@@ -287,7 +276,6 @@ end
 -- 9. АБСОЛЮТНИЙ ТАЙМЕР ANTI-STUCK (20 СЕКУНД)
 task.spawn(function()
     while task.wait(1) do
-        -- Працює тільки якщо авто-фарм увімкнений і ми зараз не в процесі хопа
         if _G.SlappleFarm and not _G.IsHopping then
             if tick() - serverStartTime > 20 then
                 print("⚠️ МИНУЛО 20 СЕКУНД! ПРИМУСОВИЙ ХОП...")
@@ -324,7 +312,7 @@ local function GetSlappleTouchPart(slapple)
     return nil
 end
 
--- 10. Збір яблук 
+-- 10. Збір яблук З ПОДВІЙНОЮ ПЕРЕВІРКОЮ
 local function CollectAllSlapplesRemote()
     local char = Players.LocalPlayer.Character
     local leaderstats = Players.LocalPlayer:FindFirstChild("leaderstats")
@@ -341,7 +329,6 @@ local function CollectAllSlapplesRemote()
         if arena and arena:FindFirstChild("island5") and arena.island5:FindFirstChild("Slapples") then 
             local island = arena.island5
             local slappleContainer = island.Slapples
-            local items = slappleContainer:GetChildren()
 
             local islandCFrame = island:IsA("Model") and island:GetPivot() or island.CFrame
             local safeCFrame = islandCFrame * CFrame.new(0, -15, 0)
@@ -355,26 +342,46 @@ local function CollectAllSlapplesRemote()
                 task.wait(0.1) 
             end
 
-            for _, v in ipairs(items) do 
-                if not _G.SlappleFarm then break end
+            -- Функція для безпосереднього збору
+            local function TryCollect()
+                for _, v in ipairs(slappleContainer:GetChildren()) do 
+                    if not _G.SlappleFarm then break end
+                    if v.Name == "Slapple" or v.Name == "GoldenSlapple" or v.Name:find("Slapple") then 
+                        local targetPart = GetSlappleTouchPart(v)
+                        if targetPart then
+                            pcall(function()
+                                firetouchinterest(hrp, targetPart, 0) 
+                                task.wait(0.02) 
+                                firetouchinterest(hrp, targetPart, 1) 
+                            end)
+                        end
+                    end 
+                end
+            end
 
-                if v.Name == "Slapple" or v.Name == "GoldenSlapple" or v.Name:find("Slapple") then 
-                    local targetPart = GetSlappleTouchPart(v)
-
-                    if targetPart then
-                        pcall(function()
-                            firetouchinterest(hrp, targetPart, 0) 
-                            task.wait(0.03) 
-                            firetouchinterest(hrp, targetPart, 1) 
-                        end)
-                        task.wait(0.03) 
-                    end
-                end 
+            -- 1. ПЕРШИЙ ПРОХІД (Збираємо швидко)
+            TryCollect()
+            
+            -- 2. ЧЕКАЄМО 0.4 СЕКУНДИ, ЩОБ СЕРВЕР ОБРОБИВ ЗБІР
+            task.wait(0.4)
+            
+            -- 3. ПЕРЕВІРКА: Чи залишились яблука?
+            local hasLeft = false
+            for _, v in ipairs(slappleContainer:GetChildren()) do
+                if v.Name == "Slapple" or v.Name == "GoldenSlapple" or v.Name:find("Slapple") then
+                    hasLeft = true
+                    break
+                end
+            end
+            
+            -- 4. ЯКЩО ЯБЛУКА ЗАЛИШИЛИСЬ (сервер затупив) - ЗБИРАЄМО ЩЕ РАЗ!
+            if hasLeft then
+                print("⚠️ Сервер не зрозумів перший збір, повторюємо...")
+                TryCollect()
+                task.wait(0.3)
             end
         end 
     end 
-    
-    task.wait(0.8)
     
     local endSlaps = 0
     if leaderstats and leaderstats:FindFirstChild("Slaps") then
@@ -458,7 +465,7 @@ Tab:AddToggle({
                             end
                         end)
 
-                        task.wait(0.5)
+                        task.wait(0.2)
                         DoServerHop()
                         break 
                     end
@@ -532,5 +539,6 @@ BypassTab:AddParagraph("Знищення клієнтських скриптів
 BypassTab:AddLabel("Anti-Teleport: ✅ ACTIVE")
 BypassTab:AddParagraph("Абсолютний захист від телепортів", "Будь-який телепорт, окрім Server Hop, блокується наглухо.")
 BypassTab:AddLabel("Anti-AFK: ✅ ACTIVE")
+BypassTab:AddParagraph("Smart Apple Collector", "Скрипт перевіряє, чи всі яблука зібрано, і якщо ні — збирає їх повторно!")
 
 isInitializing = false
