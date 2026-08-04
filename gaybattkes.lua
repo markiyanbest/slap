@@ -317,7 +317,7 @@ local function GetSlappleTouchPart(slapple)
     return nil
 end
 
--- 10. Збір яблук (МИТТЄВИЙ ЗБІР + 0.3 СЕК НА СИНХРОНІЗАЦІЮ)
+-- 10. Збір яблук (ТРОХИ ПОВІЛЬНІШИЙ ДЛЯ СИНХРОНІЗАЦІЇ)
 local function CollectAllSlapplesRemote()
     local char = Players.LocalPlayer.Character
     local leaderstats = Players.LocalPlayer:FindFirstChild("leaderstats")
@@ -357,18 +357,18 @@ local function CollectAllSlapplesRemote()
                     if targetPart then
                         pcall(function()
                             firetouchinterest(hrp, targetPart, 0) 
-                            task.wait(0.01) -- МИТТЄВИЙ ЗБІР
+                            task.wait(0.03) -- ТРОХИ ПРИГАЛЬМУВАЛИ (було 0.01)
                             firetouchinterest(hrp, targetPart, 1) 
                         end)
-                        task.wait(0.01) -- МИТТЄВИЙ ЗБІР
+                        task.wait(0.03) -- ТРОХИ ПРИГАЛЬМУВАЛИ (було 0.01)
                     end
                 end 
             end
         end 
     end 
     
-    -- ВІДДАЄМО СЕРВЕРУ 0.3 СЕКУНДИ, ЩОБ ВІН 100% НАРАХУВАВ СЛАПИ
-    task.wait(0.3)
+    -- ДАЄМО СЕРВЕРУ 0.8 СЕКУНДИ (було 0.3), ЩОБ 100% НАРАХУВАТИ СЛАПИ
+    task.wait(0.8)
     
     local endSlaps = 0
     if leaderstats and leaderstats:FindFirstChild("Slaps") then
@@ -452,7 +452,8 @@ Tab:AddToggle({
                             end
                         end)
 
-                        -- МИТТЄВИЙ ХОП
+                        -- НЕВЕЛИКА ПАУЗА ПЕРЕД ХОПОМ (щоб база даних зберегла прогрес)
+                        task.wait(0.5)
                         DoServerHop()
                         break 
                     end
