@@ -12,7 +12,7 @@ local ConfigFile = "SlappleFarm_Settings.json"
 local isInitializing = true
 local noclipConnection = nil
 
--- АНТИ-БРАЗИЛІЯ
+-- АНТИ-БРАЗИЛІЯ: Перевірка ID при запуску
 if game.PlaceId ~= MAIN_PLACE_ID then
     print("⚠️ ВІДНАЙДЕНО БРАЗИЛІЮ! ПОВЕРТАЄМОСЯ В ОСНОВНУ ГРУ...")
     _G.AllowTeleport = true
@@ -24,7 +24,7 @@ local serverStartTime = tick()
 _G.AllowTeleport = false
 _G.IsHopping = false
 
--- 1. МЕГА-ХУК
+-- 1. МЕГА-ХУК: Абсолютний блок телепортів + Античіт
 if hookmetamethod then
     local oldNamecall
     oldNamecall = hookmetamethod(game, "__namecall", newcclosure(function(self, ...)
@@ -181,7 +181,7 @@ end)
 
 local OrionLib = loadstring(game:HttpGet("https://raw.githubusercontent.com/Giangplay/Script/main/Orion_Library_PE_V2.lua"))()
 
--- 8. Server Hop
+-- 8. Server Hop (БЕЗ ПОПАДАННЯ ДО ДРУЗІВ)
 local function DoServerHop()
     if _G.IsHopping then return end
     _G.IsHopping = true
@@ -226,6 +226,7 @@ local function DoServerHop()
     local jobId = game.JobId 
     local targetServerId = nil 
 
+    -- ЗАВЖДИ СОРТУЄМО ВІД НАЙМЕНШОГО КІЛЬКОСТІ ГРАВЦІВ (Asc)
     local success, response = pcall(function() 
         return game:HttpGet("https://games.roblox.com/v1/games/" .. tostring(placeId) .. "/servers/Public?sortOrder=Asc&limit=100") 
     end) 
@@ -240,6 +241,7 @@ local function DoServerHop()
                 end 
             end 
             if #validServers > 0 then 
+                -- ВИБИРАЄМО ВИПАДКОВИЙ СЕРВЕР З ПЕРШИХ 5 НАЙПОРОЖНІШИХ
                 local maxChoices = math.min(5, #validServers)
                 targetServerId = validServers[math.random(1, maxChoices)] 
             end 
@@ -247,9 +249,15 @@ local function DoServerHop()
     end 
 
     if targetServerId then 
+        -- ВИКОРИСТОВУЄМО ТІЛЬКИ КОНКРЕТНИЙ СЕРВЕР (НЕ КИДАЄ ДО ДРУЗІВ)
         pcall(function() TeleportService:TeleportToPlaceInstance(placeId, targetServerId, Players.LocalPlayer) end)
     else 
-        pcall(function() TeleportService:Teleport(placeId, Players.LocalPlayer) end) 
+        -- ЯКЩО СЕРВЕРІВ НЕМАЄ, ЧЕКАЄМО І ПОШУК НЕ ПРИПИНЯЄМО (НЕ ВИКОРИСТОВУЄМО TELEPORT!)
+        print("⚠️ Не знайдено сервера без друзів, чекаємо 2 секунди...")
+        task.wait(2)
+        _G.IsHopping = false
+        _G.AllowTeleport = false
+        return
     end 
 
     task.delay(6, function()
@@ -273,12 +281,12 @@ if not _G.TeleportHooked then
     end)
 end
 
--- 9. АБСОЛЮТНИЙ ТАЙМЕР ANTI-STUCK (20 СЕКУНД)
+-- 9. АБСОЛЮТНИЙ ТАЙМЕР ANTI-STUCK (25 СЕКУНД)
 task.spawn(function()
     while task.wait(1) do
         if _G.SlappleFarm and not _G.IsHopping then
-            if tick() - serverStartTime > 20 then
-                print("⚠️ МИНУЛО 20 СЕКУНД! ПРИМУСОВИЙ ХОП...")
+            if tick() - serverStartTime > 25 then
+                print("⚠️ МИНУЛО 25 СЕКУНД! ПРИМУСОВИЙ ХОП...")
                 DoServerHop()
             end
         end
@@ -351,7 +359,7 @@ local function CollectAllSlapplesRemote()
                         if targetPart then
                             pcall(function()
                                 firetouchinterest(hrp, targetPart, 0) 
-                                task.wait(0.02) 
+                                task.wait(0.03) 
                                 firetouchinterest(hrp, targetPart, 1) 
                             end)
                         end
@@ -465,7 +473,8 @@ Tab:AddToggle({
                             end
                         end)
 
-                        task.wait(0.2)
+                        -- ЗАТРИМКА 2 СЕКУНДИ (ВІД ПОМИЛКИ PROFILE LOADING)
+                        task.wait(2)
                         DoServerHop()
                         break 
                     end
@@ -537,8 +546,7 @@ local BypassTab = Window:MakeTab({
 BypassTab:AddLabel("Anti-Cheat Bypass: ✅ ACTIVE")
 BypassTab:AddParagraph("Знищення клієнтських скриптів", "Скрипт видалив Anti-offset, Antidream, AntiMobileExploits та CodeDetector.")
 BypassTab:AddLabel("Anti-Teleport: ✅ ACTIVE")
-BypassTab:AddParagraph("Абсолютний захист від телепортів", "Будь-який телепорт, окрім Server Hop, блокується наглухо.")
+BypassTab:AddParagraph("Абсолютний захист від телепортів", "Будь-який телепорт, окрім Server Hop, блокується наглухо. До друзів не кидає.")
 BypassTab:AddLabel("Anti-AFK: ✅ ACTIVE")
-BypassTab:AddParagraph("Smart Apple Collector", "Скрипт перевіряє, чи всі яблука зібрано, і якщо ні — збирає їх повторно!")
 
 isInitializing = false
