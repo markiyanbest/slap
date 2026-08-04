@@ -317,7 +317,7 @@ local function GetSlappleTouchPart(slapple)
     return nil
 end
 
--- 10. Збір яблук (ПОВЕРНЕНО МИТТЄВУ ШВИДКІСТЬ)
+-- 10. Збір яблук (МИТТЄВИЙ ЗБІР + 0.3 СЕК НА СИНХРОНІЗАЦІЮ)
 local function CollectAllSlapplesRemote()
     local char = Players.LocalPlayer.Character
     local leaderstats = Players.LocalPlayer:FindFirstChild("leaderstats")
@@ -357,17 +357,19 @@ local function CollectAllSlapplesRemote()
                     if targetPart then
                         pcall(function()
                             firetouchinterest(hrp, targetPart, 0) 
-                            task.wait(0.01) -- МИТТЄВО
+                            task.wait(0.01) -- МИТТЄВИЙ ЗБІР
                             firetouchinterest(hrp, targetPart, 1) 
                         end)
-                        task.wait(0.01) -- МИТТЄВО
+                        task.wait(0.01) -- МИТТЄВИЙ ЗБІР
                     end
                 end 
             end
         end 
     end 
     
-    -- ПРИБРАНО ЧЕКАННЯ В 1.5 СЕКУНДИ. Одразу рахуємо слапи і йдемо хопати!
+    -- ВІДДАЄМО СЕРВЕРУ 0.3 СЕКУНДИ, ЩОБ ВІН 100% НАРАХУВАВ СЛАПИ
+    task.wait(0.3)
+    
     local endSlaps = 0
     if leaderstats and leaderstats:FindFirstChild("Slaps") then
         endSlaps = leaderstats.Slaps.Value
@@ -450,7 +452,7 @@ Tab:AddToggle({
                             end
                         end)
 
-                        -- МИТТЄВИЙ ХОП БЕЗ ЗАТРИМКИ
+                        -- МИТТЄВИЙ ХОП
                         DoServerHop()
                         break 
                     end
