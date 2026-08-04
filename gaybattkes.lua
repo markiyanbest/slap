@@ -181,7 +181,7 @@ end)
 
 local OrionLib = loadstring(game:HttpGet("https://raw.githubusercontent.com/Giangplay/Script/main/Orion_Library_PE_V2.lua"))()
 
--- 8. Server Hop (ПОВЕРНУТО ЯК БУЛО + РАНДОМ)
+-- 8. Server Hop
 local function DoServerHop()
     if _G.IsHopping then return end
     _G.IsHopping = true
@@ -226,7 +226,6 @@ local function DoServerHop()
     local jobId = game.JobId 
     local targetServerId = nil 
 
-    -- РАНДОМНЕ СОРТУВАННЯ СЕРВЕРІВ (щоб не ходити одним маршрутом з іншими читерами)
     local sortOrder = math.random() > 0.5 and "Asc" or "Desc"
     
     local success, response = pcall(function() 
@@ -243,7 +242,6 @@ local function DoServerHop()
                 end 
             end 
             if #validServers > 0 then 
-                -- ВИБИРАЄМО ВИПАДКОВИЙ СЕРВЕР ЗІ СПИСКУ
                 targetServerId = validServers[math.random(1, #validServers)] 
             end 
         end 
@@ -255,7 +253,6 @@ local function DoServerHop()
         pcall(function() TeleportService:Teleport(placeId, Players.LocalPlayer) end) 
     end 
 
-    -- ПОВЕРНУТО ТАЙМЕР СКИДУ (ЩОБ НЕ ЗАВИСАЛО)
     task.delay(6, function()
         _G.IsHopping = false 
         _G.AllowTeleport = false
@@ -320,7 +317,7 @@ local function GetSlappleTouchPart(slapple)
     return nil
 end
 
--- 10. Збір яблук і ПІДРАХУНОК СЛАПІВ
+-- 10. Збір яблук (ПОВЕРНЕНО МИТТЄВУ ШВИДКІСТЬ)
 local function CollectAllSlapplesRemote()
     local char = Players.LocalPlayer.Character
     local leaderstats = Players.LocalPlayer:FindFirstChild("leaderstats")
@@ -360,18 +357,17 @@ local function CollectAllSlapplesRemote()
                     if targetPart then
                         pcall(function()
                             firetouchinterest(hrp, targetPart, 0) 
-                            task.wait(0.03) 
+                            task.wait(0.01) -- МИТТЄВО
                             firetouchinterest(hrp, targetPart, 1) 
                         end)
-                        task.wait(0.03) 
+                        task.wait(0.01) -- МИТТЄВО
                     end
                 end 
             end
         end 
     end 
     
-    task.wait(1.5)
-    
+    -- ПРИБРАНО ЧЕКАННЯ В 1.5 СЕКУНДИ. Одразу рахуємо слапи і йдемо хопати!
     local endSlaps = 0
     if leaderstats and leaderstats:FindFirstChild("Slaps") then
         endSlaps = leaderstats.Slaps.Value
@@ -454,6 +450,7 @@ Tab:AddToggle({
                             end
                         end)
 
+                        -- МИТТЄВИЙ ХОП БЕЗ ЗАТРИМКИ
                         DoServerHop()
                         break 
                     end
