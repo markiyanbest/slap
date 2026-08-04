@@ -181,7 +181,7 @@ end)
 
 local OrionLib = loadstring(game:HttpGet("https://raw.githubusercontent.com/Giangplay/Script/main/Orion_Library_PE_V2.lua"))()
 
--- 8. Server Hop
+-- 8. Server Hop (ТЕПЕР ШУКАЄ НАЙПОРОЖНІШІ СЕРВЕРИ)
 local function DoServerHop()
     if _G.IsHopping then return end
     _G.IsHopping = true
@@ -192,7 +192,7 @@ local function DoServerHop()
     pcall(function()
         OrionLib:MakeNotification({ 
             Name = "Server Hop 🚀", 
-            Content = "Переходимо на новий сервер...", 
+            Content = "Шукаємо порожній сервер...", 
             Image = "rbxassetid://7734053426", 
             Time = 2 
         }) 
@@ -226,10 +226,9 @@ local function DoServerHop()
     local jobId = game.JobId 
     local targetServerId = nil 
 
-    local sortOrder = math.random() > 0.5 and "Asc" or "Desc"
-    
+    -- ЗАВЖДИ СОРТУЄМО ВІД НАЙМЕНШОГО КІЛЬКОСТІ ГРАВЦІВ (Asc)
     local success, response = pcall(function() 
-        return game:HttpGet("https://games.roblox.com/v1/games/" .. tostring(placeId) .. "/servers/Public?sortOrder=" .. sortOrder .. "&limit=100") 
+        return game:HttpGet("https://games.roblox.com/v1/games/" .. tostring(placeId) .. "/servers/Public?sortOrder=Asc&limit=100") 
     end) 
 
     if success and response then 
@@ -242,7 +241,9 @@ local function DoServerHop()
                 end 
             end 
             if #validServers > 0 then 
-                targetServerId = validServers[math.random(1, #validServers)] 
+                -- ВИБИРАЄМО ВИПАДКОВИЙ СЕРВЕР З ПЕРШИХ 5 НАЙПОРОЖНІШИХ
+                local maxChoices = math.min(5, #validServers)
+                targetServerId = validServers[math.random(1, maxChoices)] 
             end 
         end 
     end 
@@ -317,7 +318,7 @@ local function GetSlappleTouchPart(slapple)
     return nil
 end
 
--- 10. Збір яблук (ТРОХИ ПОВІЛЬНІШИЙ ДЛЯ СИНХРОНІЗАЦІЇ)
+-- 10. Збір яблук (ЗІ ШВИДКІСТЮ І СИНХРОНІЗАЦІЄЮ)
 local function CollectAllSlapplesRemote()
     local char = Players.LocalPlayer.Character
     local leaderstats = Players.LocalPlayer:FindFirstChild("leaderstats")
@@ -357,17 +358,17 @@ local function CollectAllSlapplesRemote()
                     if targetPart then
                         pcall(function()
                             firetouchinterest(hrp, targetPart, 0) 
-                            task.wait(0.03) -- ТРОХИ ПРИГАЛЬМУВАЛИ (було 0.01)
+                            task.wait(0.03) 
                             firetouchinterest(hrp, targetPart, 1) 
                         end)
-                        task.wait(0.03) -- ТРОХИ ПРИГАЛЬМУВАЛИ (було 0.01)
+                        task.wait(0.03) 
                     end
                 end 
             end
         end 
     end 
     
-    -- ДАЄМО СЕРВЕРУ 0.8 СЕКУНДИ (було 0.3), ЩОБ 100% НАРАХУВАТИ СЛАПИ
+    -- ДАЄМО СЕРВЕРУ 0.8 СЕКУНДИ, ЩОБ 100% НАРАХУВАТИ СЛАПИ
     task.wait(0.8)
     
     local endSlaps = 0
@@ -452,7 +453,7 @@ Tab:AddToggle({
                             end
                         end)
 
-                        -- НЕВЕЛИКА ПАУЗА ПЕРЕД ХОПОМ (щоб база даних зберегла прогрес)
+                        -- НЕВЕЛИКА ПАУЗА ПЕРЕД ХОПОМ
                         task.wait(0.5)
                         DoServerHop()
                         break 
@@ -527,5 +528,6 @@ BypassTab:AddParagraph("Знищення клієнтських скриптів
 BypassTab:AddLabel("Anti-Teleport: ✅ ACTIVE")
 BypassTab:AddParagraph("Абсолютний захист від телепортів", "Будь-який телепорт, окрім Server Hop, блокується наглухо.")
 BypassTab:AddLabel("Anti-AFK: ✅ ACTIVE")
+BypassTab:AddParagraph("Smart Server Hop", "Скрипт шукає найпорожніші сервери, щоб збирати максимум яблук.")
 
 isInitializing = false
