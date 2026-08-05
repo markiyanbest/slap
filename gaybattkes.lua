@@ -39,7 +39,7 @@ if hookmetamethod then
                 task.wait(0.5)
                 pcall(function() TeleportService:Teleport(MAIN_PLACE_ID, Players.LocalPlayer) end)
             end)
-            return nil -- Блокуємо кік, щоб не викинуло з гри жорстко
+            return nil 
         end
 
         -- Блокування сторонніх телепортів (Бразилія)
@@ -47,7 +47,6 @@ if hookmetamethod then
             if not _G.AllowTeleport then return nil end
             local targetPlaceId = method == "TeleportAsync" and args[2] or args[1]
             if targetPlaceId and targetPlaceId ~= MAIN_PLACE_ID then
-                print("🛑 ТЕЛЕПОРТ ЗАБЛОКОВАНО! (Спроба втекти в інший плейс)")
                 return nil
             end
         end
@@ -141,7 +140,7 @@ if not safePlatform then
     safePlatform.Parent = workspace
 end
 
--- 5. Завантаження налаштувань
+-- 5. Завантаження та збереження налаштувань
 local function LoadSettings()
     if isfile and readfile and isfile(ConfigFile) then
         local success, result = pcall(function() return HttpService:JSONDecode(readfile(ConfigFile)) end)
@@ -161,7 +160,6 @@ local function LoadSettings()
     _G.TotalSlapsFarmed = 0
 end
 
--- 6. Збереження налаштувань
 local function SaveSettings()
     if isInitializing then return end
     if writefile then
@@ -179,6 +177,7 @@ end
 
 LoadSettings()
 
+-- 6. ОПТИМІЗОВАНИЙ НОУКЛІП (Не навантажує ПК)
 local function SetNoclip(state)
     if state then
         if not noclipConnection then
@@ -186,7 +185,7 @@ local function SetNoclip(state)
                 local char = Players.LocalPlayer.Character
                 if char then
                     for _, v in pairs(char:GetDescendants()) do
-                        if v:IsA("BasePart") and v.Name ~= "SlappleSafePlatform" then
+                        if v:IsA("BasePart") and v.CanCollide and v.Name ~= "SlappleSafePlatform" then
                             v.CanCollide = false
                         end
                     end
@@ -304,7 +303,8 @@ local function DoServerHop()
         return
     end 
 
-    task.delay(6, function()
+    -- Зменшено до 4 секунд, щоб таймер на 25 сек швидше ловив зависання
+    task.delay(4, function()
         _G.IsHopping = false 
         _G.AllowTeleport = false
         serverStartTime = tick() 
@@ -331,7 +331,10 @@ task.spawn(function()
         if _G.SlappleFarm and not _G.IsHopping then
             if tick() - serverStartTime > 25 then
                 print("⚠️ МИНУЛО 25 СЕКУНД! ПРИМУСОВИЙ ХОП...")
+                _G.IsHopping = false
+                _G.AllowTeleport = false
                 DoServerHop()
+                serverStartTime = tick() 
             end
         end
     end
@@ -364,7 +367,7 @@ local function GetSlappleTouchPart(slapple)
     return nil
 end
 
--- 10. Збір яблук З ПОДВІЙНОЮ ПЕРЕВІРКОЮ
+-- 10. Збір яблук З ПОДВІЙНОЮ ПЕРЕВІРКОЮ (Оптимізовано)
 local function CollectAllSlapplesRemote()
     local char = Players.LocalPlayer.Character
     local leaderstats = Players.LocalPlayer:FindFirstChild("leaderstats")
@@ -402,7 +405,7 @@ local function CollectAllSlapplesRemote()
                         if targetPart then
                             pcall(function()
                                 firetouchinterest(hrp, targetPart, 0) 
-                                task.wait(0.03) 
+                                task.wait(0.05) -- Оптимальна затримка для ПК, щоб не глюкало
                                 firetouchinterest(hrp, targetPart, 1) 
                             end)
                         end
@@ -584,5 +587,6 @@ BypassTab:AddParagraph("Абсолютний захист від телепор�
 BypassTab:AddLabel("Anti-AFK: ✅ ACTIVE")
 BypassTab:AddLabel("Auto-Rejoin: ✅ ACTIVE")
 BypassTab:AddParagraph("Авто-Реджойн", "Якщо виникне помилка Profile Loading Error або кік, скрипт сам перезапустить тебе у гру.")
+BypassTab:AddLabel("PC Optimized: ✅ ACTIVE")
 
 isInitializing = false
