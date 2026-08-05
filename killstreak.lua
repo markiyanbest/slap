@@ -1,13 +1,12 @@
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
-local VirtualInputManager = game:GetService("VirtualInputManager")
 local lp = Players.LocalPlayer
 
 -- НОВА БІБЛІОТЕКА ІНТЕРФЕЙСУ (Rayfield)
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
 local Window = Rayfield:CreateWindow({
-   Name = "Killstreak & Reaper Farmer 🔪",
+   Name = "Killstreak & Reaper Farmer 🔪", 
    LoadingTitle = "Loading Farm...",
    LoadingSubtitle = "Sticky Kill Mode",
    ConfigurationSaving = { Enabled = false }
@@ -17,7 +16,6 @@ local Tab = Window:CreateTab("Main Farm", 4483362458)
 
 local targetName = ""
 
--- Поле для вводу ніку
 Tab:CreateInput({
    Name = "Нік гравця (можна половину)",
    PlaceholderText = "Наприклад: slap",
@@ -50,7 +48,6 @@ local function EnterArena()
     end
 end
 
--- Головна кнопка
 Tab:CreateToggle({
    Name = "Фармити (Приклеїтись + Удар + Ресет)",
    CurrentValue = false,
@@ -86,23 +83,29 @@ Tab:CreateToggle({
                         local stickConn
                         stickConn = RunService.Heartbeat:Connect(function()
                             if hrp and targetHrp and hrp.Parent and targetHrp.Parent then
+                                -- Стоїмо чітко спереду нього на відстані удару
                                 hrp.CFrame = targetHrp.CFrame * CFrame.new(0, 0, -3)
                                 hrp.AssemblyLinearVelocity = Vector3.zero
                             end
                         end)
                         
-                        -- Чекаємо 0.3 секунди, щоб міцно приклеїтись
-                        task.wait(0.3)
+                        -- Чекаємо 0.5 секунди, щоб міцно приклеїтись і прогрузитись
+                        task.wait(0.5)
                         
-                        -- 2. ВДАРЯЄМО (Імітуємо клік мишки)
+                        -- 2. ВДАРЯЄМО (Шукаємо рукавицю і б'ємо нею)
+                        local tool = lp.Character:FindFirstChildOfClass("Tool")
+                        if tool then
+                            pcall(function()
+                                tool:Activate() -- Пряма активація рукавиці
+                            end)
+                        end
+                        -- Запасний клік мишкою
                         pcall(function()
-                            VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 1)
-                            task.wait(0.05)
-                            VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 1)
+                            if mouse1click then mouse1click() end
                         end)
                         
-                        -- Чекаємо, щоб удар зареєструвався
-                        task.wait(0.5)
+                        -- ЧЕКАЄМО ЦІЛУ СЕКУНДУ, щоб сервер 100% ЗАРАХУВАВ УДАР
+                        task.wait(1.0)
                         
                         -- Відклеюємось
                         if stickConn then stickConn:Disconnect() end
@@ -122,7 +125,6 @@ Tab:CreateToggle({
    end,
 })
 
--- Кнопка аварійної зупинки
 Tab:CreateButton({
    Name = "АВАРІЙНИЙ СТОП",
    Callback = function()
