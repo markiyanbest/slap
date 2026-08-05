@@ -24,13 +24,25 @@ local serverStartTime = tick()
 _G.AllowTeleport = false
 _G.IsHopping = false
 
--- 1. МЕГА-ХУК: Абсолютний блок телепортів + Античіт
+-- 1. МЕГА-ХУК: Блок телепортів + Античіт + АВТО-РЕДЖОЙН
 if hookmetamethod then
     local oldNamecall
     oldNamecall = hookmetamethod(game, "__namecall", newcclosure(function(self, ...)
         local method = getnamecallmethod()
         local args = {...}
 
+        -- АВТО-РЕДЖОЙН ПРИ КІКУ (Наприклад, unexpected profile error)
+        if self == Players.LocalPlayer and method == "Kick" then
+            print("🚨 СПРОБА КІКУ! Причина: " .. tostring(args[1]) .. " | АВТО-РЕДЖОЙН!")
+            _G.AllowTeleport = true
+            task.spawn(function()
+                task.wait(0.5)
+                pcall(function() TeleportService:Teleport(MAIN_PLACE_ID, Players.LocalPlayer) end)
+            end)
+            return nil -- Блокуємо кік, щоб не викинуло з гри жорстко
+        end
+
+        -- Блокування сторонніх телепортів (Бразилія)
         if self == TeleportService and (method == "Teleport" or method == "TeleportToPlaceInstance" or method == "TeleportAsync") then
             if not _G.AllowTeleport then return nil end
             local targetPlaceId = method == "TeleportAsync" and args[2] or args[1]
@@ -40,6 +52,7 @@ if hookmetamethod then
             end
         end
 
+        -- БЛОКУВАННЯ АНТИЧІТУ SLAP BATTLES
         if method == "FireServer" or method == "InvokeServer" then
             if self.Name == "Kicker" or self.Name == "Ban" or self.Name == "LogTunnel" or self.Name == "ModerationRemote" then
                 return nil 
@@ -49,6 +62,41 @@ if hookmetamethod then
         return oldNamecall(self, ...)
     end))
 end
+
+-- АВТО-РЕДЖОЙН ЯКЩО З'ЯВИТЬСЯ ВІКНО ПОМИЛКИ (Profile Loading Error GUI)
+task.spawn(function()
+    while task.wait(2) do
+        pcall(function()
+            local pGui = Players.LocalPlayer:FindFirstChild("PlayerGui")
+            local cGui = game:GetService("CoreGui")
+            local errorFound = false
+            
+            if pGui then
+                for _, v in ipairs(pGui:GetChildren()) do
+                    if v:IsA("ScreenGui") and (v.Name:lower():find("error") or (v.Name:lower():find("profile") and v.Name:lower():find("load"))) then
+                        errorFound = true
+                        break
+                    end
+                end
+            end
+            
+            if not errorFound and cGui then
+                for _, v in ipairs(cGui:GetChildren()) do
+                    if v:IsA("ScreenGui") and v.Name:lower():find("error") then
+                        errorFound = true
+                        break
+                    end
+                end
+            end
+            
+            if errorFound then
+                print("🚨 ЗНАЙДЕНО ВІКНО ПОМИЛКИ! АВТО-РЕДЖОЙН...")
+                _G.AllowTeleport = true
+                pcall(function() TeleportService:Teleport(MAIN_PLACE_ID, Players.LocalPlayer) end)
+            end
+        end)
+    end
+end)
 
 -- 2. Anti-AFK
 Players.LocalPlayer.Idled:Connect(function()
@@ -181,7 +229,7 @@ end)
 
 local OrionLib = loadstring(game:HttpGet("https://raw.githubusercontent.com/Giangplay/Script/main/Orion_Library_PE_V2.lua"))()
 
--- 8. Server Hop (БЕЗ ПОПАДАННЯ ДО ДРУЗІВ)
+-- 8. Server Hop
 local function DoServerHop()
     if _G.IsHopping then return end
     _G.IsHopping = true
@@ -226,7 +274,6 @@ local function DoServerHop()
     local jobId = game.JobId 
     local targetServerId = nil 
 
-    -- ЗАВЖДИ СОРТУЄМО ВІД НАЙМЕНШОГО КІЛЬКОСТІ ГРАВЦІВ (Asc)
     local success, response = pcall(function() 
         return game:HttpGet("https://games.roblox.com/v1/games/" .. tostring(placeId) .. "/servers/Public?sortOrder=Asc&limit=100") 
     end) 
@@ -241,7 +288,6 @@ local function DoServerHop()
                 end 
             end 
             if #validServers > 0 then 
-                -- ВИБИРАЄМО ВИПАДКОВИЙ СЕРВЕР З ПЕРШИХ 5 НАЙПОРОЖНІШИХ
                 local maxChoices = math.min(5, #validServers)
                 targetServerId = validServers[math.random(1, maxChoices)] 
             end 
@@ -249,10 +295,8 @@ local function DoServerHop()
     end 
 
     if targetServerId then 
-        -- ВИКОРИСТОВУЄМО ТІЛЬКИ КОНКРЕТНИЙ СЕРВЕР (НЕ КИДАЄ ДО ДРУЗІВ)
         pcall(function() TeleportService:TeleportToPlaceInstance(placeId, targetServerId, Players.LocalPlayer) end)
     else 
-        -- ЯКЩО СЕРВЕРІВ НЕМАЄ, ЧЕКАЄМО І ПОШУК НЕ ПРИПИНЯЄМО (НЕ ВИКОРИСТОВУЄМО TELEPORT!)
         print("⚠️ Не знайдено сервера без друзів, чекаємо 2 секунди...")
         task.wait(2)
         _G.IsHopping = false
@@ -350,7 +394,6 @@ local function CollectAllSlapplesRemote()
                 task.wait(0.1) 
             end
 
-            -- Функція для безпосереднього збору
             local function TryCollect()
                 for _, v in ipairs(slappleContainer:GetChildren()) do 
                     if not _G.SlappleFarm then break end
@@ -367,13 +410,9 @@ local function CollectAllSlapplesRemote()
                 end
             end
 
-            -- 1. ПЕРШИЙ ПРОХІД (Збираємо швидко)
             TryCollect()
-            
-            -- 2. ЧЕКАЄМО 0.4 СЕКУНДИ, ЩОБ СЕРВЕР ОБРОБИВ ЗБІР
             task.wait(0.4)
             
-            -- 3. ПЕРЕВІРКА: Чи залишились яблука?
             local hasLeft = false
             for _, v in ipairs(slappleContainer:GetChildren()) do
                 if v.Name == "Slapple" or v.Name == "GoldenSlapple" or v.Name:find("Slapple") then
@@ -382,9 +421,7 @@ local function CollectAllSlapplesRemote()
                 end
             end
             
-            -- 4. ЯКЩО ЯБЛУКА ЗАЛИШИЛИСЬ (сервер затупив) - ЗБИРАЄМО ЩЕ РАЗ!
             if hasLeft then
-                print("⚠️ Сервер не зрозумів перший збір, повторюємо...")
                 TryCollect()
                 task.wait(0.3)
             end
@@ -422,10 +459,8 @@ local Tab = Window:MakeTab({
     PremiumOnly = false
 })
 
--- ЛІЧИЛЬНИК СЛАПІВ
 local StatLabel = Tab:AddLabel("Нафармовано цим скриптом: " .. tostring(_G.TotalSlapsFarmed) .. " слапів")
 
--- ОНОВЛЕННЯ ЛІЧИЛЬНИКА КОЖНУ СЕКУНДУ
 task.spawn(function()
     while task.wait(1) do
         pcall(function()
@@ -473,7 +508,6 @@ Tab:AddToggle({
                             end
                         end)
 
-                        -- ЗАТРИМКА 2 СЕКУНДИ (ВІД ПОМИЛКИ PROFILE LOADING)
                         task.wait(2)
                         DoServerHop()
                         break 
@@ -548,5 +582,7 @@ BypassTab:AddParagraph("Знищення клієнтських скриптів
 BypassTab:AddLabel("Anti-Teleport: ✅ ACTIVE")
 BypassTab:AddParagraph("Абсолютний захист від телепортів", "Будь-який телепорт, окрім Server Hop, блокується наглухо. До друзів не кидає.")
 BypassTab:AddLabel("Anti-AFK: ✅ ACTIVE")
+BypassTab:AddLabel("Auto-Rejoin: ✅ ACTIVE")
+BypassTab:AddParagraph("Авто-Реджойн", "Якщо виникне помилка Profile Loading Error або кік, скрипт сам перезапустить тебе у гру.")
 
 isInitializing = false
