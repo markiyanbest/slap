@@ -31,7 +31,7 @@ if hookmetamethod then
         local method = getnamecallmethod()
         local args = {...}
 
-        -- АВТО-РЕДЖОЙН ПРИ КІКУ
+        -- АВТО-РЕДЖОЙН ПРИ КІКУ (Наприклад, unexpected profile error)
         if self == Players.LocalPlayer and method == "Kick" then
             print("🚨 СПРОБА КІКУ! Причина: " .. tostring(args[1]) .. " | АВТО-РЕДЖОЙН!")
             _G.AllowTeleport = true
@@ -42,6 +42,7 @@ if hookmetamethod then
             return nil 
         end
 
+        -- Блокування сторонніх телепортів (Бразилія)
         if self == TeleportService and (method == "Teleport" or method == "TeleportToPlaceInstance" or method == "TeleportAsync") then
             if not _G.AllowTeleport then return nil end
             local targetPlaceId = method == "TeleportAsync" and args[2] or args[1]
@@ -50,6 +51,7 @@ if hookmetamethod then
             end
         end
 
+        -- БЛОКУВАННЯ АНТИЧІТУ SLAP BATTLES
         if method == "FireServer" or method == "InvokeServer" then
             if self.Name == "Kicker" or self.Name == "Ban" or self.Name == "LogTunnel" or self.Name == "ModerationRemote" then
                 return nil 
@@ -60,7 +62,7 @@ if hookmetamethod then
     end))
 end
 
--- АВТО-РЕДЖОЙН ЯКЩО З'ЯВИТЬСЯ ВІКНО ПОМИЛКИ
+-- АВТО-РЕДЖОЙН ЯКЩО З'ЯВИТЬСЯ ВІКНО ПОМИЛКИ (Profile Loading Error GUI)
 task.spawn(function()
     while task.wait(2) do
         pcall(function()
@@ -226,7 +228,7 @@ end)
 
 local OrionLib = loadstring(game:HttpGet("https://raw.githubusercontent.com/Giangplay/Script/main/Orion_Library_PE_V2.lua"))()
 
--- 8. Server Hop (З TELEPORTASYNC ДЛЯ НАДІЙНОСТІ)
+-- 8. Server Hop (ПОВЕРНУТО СТАРУ НАДІЙНУ ФУНКЦІЮ)
 local function DoServerHop()
     if _G.IsHopping then return end
     _G.IsHopping = true
@@ -292,29 +294,13 @@ local function DoServerHop()
     end 
 
     if targetServerId then 
-        -- ВИКОРИСТОВУЄМО TELEPORTASYNC (ВІН НАДІЙНІШИЙ)
-        local tpOptions = Instance.new("TeleportOptions")
-        tpOptions.ServerInstanceId = targetServerId
-        local tpSuccess, tpError = pcall(function()
-            TeleportService:TeleportAsync(placeId, {Players.LocalPlayer}, tpOptions)
-        end)
-        
-        -- ЯКЩО TELEPORTASYNC ДАВ ЗБІЙ - МИТТЄВО ПРОБУЄМО ЗНОВУ!
-        if not tpSuccess then
-            warn("❌ Помилка телепорту! Пробуємо знову...")
-            task.wait(1)
-            _G.IsHopping = false
-            _G.AllowTeleport = false
-            DoServerHop()
-            return
-        end
+        -- ПОВЕРНУТО TELEPORTTOPLACEINSTANCE
+        pcall(function() TeleportService:TeleportToPlaceInstance(placeId, targetServerId, Players.LocalPlayer) end)
     else 
-        -- ЯКЩО СЕРВЕРІВ НЕМАЄ - МИТТЄВО ПРОБУЄМО ЗНОВУ!
-        print("⚠️ Не знайдено сервера, чекаємо 2 секунди і пробуємо знову...")
+        print("⚠️ Не знайдено сервера, чекаємо 2 секунди...")
         task.wait(2)
         _G.IsHopping = false
         _G.AllowTeleport = false
-        DoServerHop()
         return
     end 
 
@@ -339,12 +325,12 @@ if not _G.TeleportHooked then
     end)
 end
 
--- 9. АБСОЛЮТНИЙ ТАЙМЕР ANTI-STUCK (30 СЕКУНД)
+-- 9. АБСОЛЮТНИЙ ТАЙМЕР ANTI-STUCK (25 СЕКУНД)
 task.spawn(function()
     while task.wait(1) do
         if _G.SlappleFarm and not _G.IsHopping then
-            if tick() - serverStartTime > 30 then
-                print("⚠️ МИНУЛО 30 СЕКУНД! ПРИМУСОВИЙ ХОП...")
+            if tick() - serverStartTime > 25 then
+                print("⚠️ МИНУЛО 25 СЕКУНД! ПРИМУСОВИЙ ХОП...")
                 _G.IsHopping = false
                 _G.AllowTeleport = false
                 DoServerHop()
