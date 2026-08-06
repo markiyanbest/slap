@@ -25,6 +25,8 @@ local hitboxLoop = nil
 local hitboxSize = 10
 local autoSlapConn = nil
 local slapReach = 15
+local espLoop = nil
+local antiFxLoop = nil
 
 if game.PlaceId ~= MAIN_PLACE_ID then
     print("⚠️ BRAZIL DETECTED! RETURNING TO MAIN GAME...")
@@ -414,36 +416,30 @@ local function CollectAllSlapplesRemote()
                 task.wait(0.1) 
             end
 
-            local function TryCollect()
+            -- НОВИЙ ЦИКЛ ЗБОРУ: Працює, поки є видимі яблука (або до 2 секунд)
+            local startTime = tick()
+            while _G.SlappleFarm and (tick() - startTime < 2.0) do
+                local foundUncollected = false
                 for _, v in ipairs(slappleContainer:GetChildren()) do 
-                    if not _G.SlappleFarm then break end
                     if v.Name == "Slapple" or v.Name == "GoldenSlapple" or v.Name:find("Slapple") then 
                         local targetPart = GetSlappleTouchPart(v)
-                        if targetPart then
+                        -- Якщо деталь існує і вона НЕ невидима ( Transparency ~= 1 )
+                        if targetPart and targetPart.Transparency ~= 1 then 
+                            foundUncollected = true
                             pcall(function()
                                 firetouchinterest(hrp, targetPart, 0) 
-                                task.wait(0.08) 
+                                task.wait(0.05) 
                                 firetouchinterest(hrp, targetPart, 1) 
                             end)
                         end
                     end 
                 end
-            end
-
-            TryCollect()
-            task.wait(0.4)
-            
-            local hasLeft = false
-            for _, v in ipairs(slappleContainer:GetChildren()) do
-                if v.Name == "Slapple" or v.Name == "GoldenSlapple" or v.Name:find("Slapple") then
-                    hasLeft = true
+                
+                -- Якщо невидимих яблук не залишилося — виходимо з циклу
+                if not foundUncollected then
                     break
                 end
-            end
-            
-            if hasLeft then
-                TryCollect()
-                task.wait(0.3)
+                task.wait(0.1) -- Невелика пауза перед наступною спробою
             end
         end 
     end 
@@ -526,7 +522,6 @@ local function SetHitbox(state)
                 for _, v in pairs(Players:GetPlayers()) do
                     if v ~= Players.LocalPlayer and v.Character and v.Character:FindFirstChild("HumanoidRootPart") then
                         pcall(function()
-                            -- Перевіряємо розмір, щоб не паралізувати гравця
                             if v.Character.HumanoidRootPart.Size.X ~= hitboxSize then
                                 v.Character.HumanoidRootPart.Size = Vector3.new(hitboxSize, hitboxSize, hitboxSize)
                                 v.Character.HumanoidRootPart.Transparency = 0.7
@@ -536,7 +531,7 @@ local function SetHitbox(state)
                         end)
                     end
                 end
-                task.wait(1) -- Повільніше оновлення, щоб не було лагів
+                task.wait(1)
             end
         end)
     else
@@ -588,9 +583,95 @@ local function SetAutoSlap(state, reach)
                         end
                     end
                 end
-                task.wait(0.2) -- Затримка, щоб не кікнуло за спам ремоутів!
+                task.wait(0.2)
             end
         end)
+    end
+end
+
+-- ФУНКЦІЯ GLOVE ESP
+local function SetGloveESP(state)
+    if espLoop then 
+        espLoop:Disconnect()
+        espLoop = nil 
+    end
+    
+    if state then
+        getgenv().GloveESP = true
+        espLoop = task.spawn(function()
+            while getgenv().GloveESP do
+                for _, v in pairs(Players:GetPlayers()) do
+                    if v ~= Players.LocalPlayer and v.Character and v.Character:FindFirstChild("Head") and v:FindFirstChild("leaderstats") then
+                        local gloveStat = v.leaderstats:FindFirstChild("Glove")
+                        if gloveStat then
+                            local head = v.Character.Head
+                            local esp = head:FindFirstChild("GloveESP")
+                            if not esp then
+                                esp = Instance.new("BillboardGui")
+                                esp.Name = "GloveESP"
+                                esp.Adornee = head
+                                esp.Size = UDim2.new(0, 200, 0, 50)
+                                esp.StudsOffset = Vector3.new(0, 3, 0)
+                                esp.AlwaysOnTop = true
+                                
+                                local txt = Instance.new("TextLabel")
+                                txt.Name = "Label"
+                                txt.Size = UDim2.new(1, 0, 1, 0)
+                                txt.BackgroundTransparency = 1
+                                txt.TextColor3 = Color3.fromRGB(255, 255, 255)
+                                txt.TextStrokeTransparency = 0
+                                txt.Font = Enum.Font.GothamBold
+                                txt.TextSize = 18
+                                txt.Parent = esp
+                                esp.Parent = head
+                            end
+                            esp.Label.Text = v.Name .. " [" .. gloveStat.Value .. "]"
+                        end
+                    end
+                end
+                task.wait(1)
+            end
+        end)
+    else
+        getgenv().GloveESP = false
+        for _, v in pairs(Players:GetPlayers()) do
+            if v ~= Players.LocalPlayer and v.Character and v.Character:FindFirstChild("Head") then
+                local esp = v.Character.Head:FindFirstChild("GloveESP")
+                if esp then esp:Destroy() end
+            end
+        end
+    end
+end
+
+-- ФУНКЦІЯ ANTI-SCREEN EFFECTS
+local function SetAntiScreenEffects(state)
+    if antiFxLoop then 
+        antiFxLoop:Disconnect()
+        antiFxLoop = nil 
+    end
+    
+    if state then
+        getgenv().AntiFx = true
+        antiFxLoop = task.spawn(function()
+            while getgenv().AntiFx do
+                pcall(function()
+                    local pGui = Players.LocalPlayer:FindFirstChild("PlayerGui")
+                    if pGui then
+                        local blindGuis = {"MittenBlind", "SquidInk", "Flashbang", "Vignette"}
+                        for _, guiName in ipairs(blindGuis) do
+                            local gui = pGui:FindFirstChild(guiName)
+                            if gui then gui.Enabled = false end
+                        end
+                    end
+                    for _, v in pairs(Lighting:GetChildren()) do
+                        if v:IsA("BlurEffect") and v.Size > 0 then v.Size = 0 end
+                    end
+                end)
+                task.wait(0.5)
+            end
+        end)
+    else
+        getgenv().AntiFx = false
     end
 end
 
@@ -938,6 +1019,14 @@ VisualTab:AddToggle({
     end
 })
 
+VisualTab:AddToggle({
+    Name = "Glove ESP (See through walls)", 
+    Default = false, 
+    Callback = function(Value) 
+        SetGloveESP(Value) 
+    end
+})
+
 -- ВКЛАДКА 8: ОБХОДИ ТА ЗАХИСТ
 local BypassTab = Window:MakeTab({Name = "Bypasses & Anti", Icon = "rbxassetid://7733960948", PremiumOnly = false})
 
@@ -953,6 +1042,7 @@ BypassTab:AddToggle({
     Callback = function(Value)
         if antiVoidConn then antiVoidConn:Disconnect() end
         if Value then
+            getgenv().AntiVoidOn = true
             antiVoidConn = task.spawn(function()
                 while getgenv().AntiVoidOn do
                     local char = Players.LocalPlayer.Character
@@ -968,13 +1058,20 @@ BypassTab:AddToggle({
                             end
                         end
                     end
-                    task.wait(0.5) -- Повільніша перевірка, щоб не було лагів
+                    task.wait(0.5)
                 end
             end)
-            getgenv().AntiVoidOn = true
         else
             getgenv().AntiVoidOn = false
         end
+    end
+})
+
+BypassTab:AddToggle({
+    Name = "Anti-Screen Effects (No Blind/Blur)", 
+    Default = false, 
+    Callback = function(Value) 
+        SetAntiScreenEffects(Value) 
     end
 })
 
