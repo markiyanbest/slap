@@ -140,7 +140,7 @@ if not safePlatform then
     safePlatform.Parent = workspace
 end
 
--- 5. Завантаження та збереження налаштувань
+-- 5. Завантаження налаштувань
 local function LoadSettings()
     if isfile and readfile and isfile(ConfigFile) then
         local success, result = pcall(function() return HttpService:JSONDecode(readfile(ConfigFile)) end)
@@ -177,7 +177,7 @@ end
 
 LoadSettings()
 
--- 6. ОПТИМІЗОВАНИЙ НОУКЛІП (Не навантажує ПК)
+-- 6. ОПТИМІЗОВАНИЙ НОУКЛІП 
 local function SetNoclip(state)
     if state then
         if not noclipConnection then
@@ -303,8 +303,8 @@ local function DoServerHop()
         return
     end 
 
-    -- Зменшено до 4 секунд, щоб таймер на 25 сек швидше ловив зависання
-    task.delay(4, function()
+    -- ЗБІЛЬШЕНО ДО 6 СЕКУНД (щоб не було наскакування хопів один на одного)
+    task.delay(6, function()
         _G.IsHopping = false 
         _G.AllowTeleport = false
         serverStartTime = tick() 
@@ -325,12 +325,12 @@ if not _G.TeleportHooked then
     end)
 end
 
--- 9. АБСОЛЮТНИЙ ТАЙМЕР ANTI-STUCK (25 СЕКУНД)
+-- 9. АБСОЛЮТНИЙ ТАЙМЕР ANTI-STUCK (ЗБІЛЬШЕНО ДО 35 СЕКУНД)
 task.spawn(function()
     while task.wait(1) do
         if _G.SlappleFarm and not _G.IsHopping then
-            if tick() - serverStartTime > 25 then
-                print("⚠️ МИНУЛО 25 СЕКУНД! ПРИМУСОВИЙ ХОП...")
+            if tick() - serverStartTime > 35 then
+                print("⚠️ МИНУЛО 35 СЕКУНД! ПРИМУСОВИЙ ХОП...")
                 _G.IsHopping = false
                 _G.AllowTeleport = false
                 DoServerHop()
@@ -367,7 +367,7 @@ local function GetSlappleTouchPart(slapple)
     return nil
 end
 
--- 10. Збір яблук З ПОДВІЙНОЮ ПЕРЕВІРКОЮ (Оптимізовано)
+-- 10. Збір яблук (ТРОХИ ПОВІЛЬНІШИЙ ДЛЯ СТАБІЛЬНОСТІ)
 local function CollectAllSlapplesRemote()
     local char = Players.LocalPlayer.Character
     local leaderstats = Players.LocalPlayer:FindFirstChild("leaderstats")
@@ -405,7 +405,7 @@ local function CollectAllSlapplesRemote()
                         if targetPart then
                             pcall(function()
                                 firetouchinterest(hrp, targetPart, 0) 
-                                task.wait(0.05) -- Оптимальна затримка для ПК, щоб не глюкало
+                                task.wait(0.08) -- ПОВІЛЬНІШЕ (було 0.05)
                                 firetouchinterest(hrp, targetPart, 1) 
                             end)
                         end
@@ -511,7 +511,8 @@ Tab:AddToggle({
                             end
                         end)
 
-                        task.wait(2)
+                        -- ЗАТРИМКА ЗБІЛЬШЕНА ДО 3 СЕКУНД (ВІД PROFILE LOADING ERROR)
+                        task.wait(3)
                         DoServerHop()
                         break 
                     end
@@ -587,6 +588,6 @@ BypassTab:AddParagraph("Абсолютний захист від телепор�
 BypassTab:AddLabel("Anti-AFK: ✅ ACTIVE")
 BypassTab:AddLabel("Auto-Rejoin: ✅ ACTIVE")
 BypassTab:AddParagraph("Авто-Реджойн", "Якщо виникне помилка Profile Loading Error або кік, скрипт сам перезапустить тебе у гру.")
-BypassTab:AddLabel("PC Optimized: ✅ ACTIVE")
+BypassTab:AddLabel("PC Optimized & Stable: ✅ ACTIVE")
 
 isInitializing = false
