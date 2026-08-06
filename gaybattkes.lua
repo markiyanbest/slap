@@ -23,6 +23,7 @@ end
 local serverStartTime = tick()
 _G.AllowTeleport = false
 _G.IsHopping = false
+_G.TargetServerId = nil -- Змінна для жорсткого блокування телепортів до друзів
 
 -- 1. МЕГА-ХУК: Блок телепортів + Античіт + АВТО-РЕДЖОЙН
 if hookmetamethod then
@@ -31,7 +32,7 @@ if hookmetamethod then
         local method = getnamecallmethod()
         local args = {...}
 
-        -- АВТО-РЕДЖОЙН ПРИ КІКУ (Наприклад, unexpected profile error)
+        -- АВТО-РЕДЖОЙН ПРИ КІКУ
         if self == Players.LocalPlayer and method == "Kick" then
             print("🚨 СПРОБА КІКУ! Причина: " .. tostring(args[1]) .. " | АВТО-РЕДЖОЙН!")
             _G.AllowTeleport = true
@@ -42,12 +43,35 @@ if hookmetamethod then
             return nil 
         end
 
-        -- Блокування сторонніх телепортів (Бразилія)
-        if self == TeleportService and (method == "Teleport" or method == "TeleportToPlaceInstance" or method == "TeleportAsync") then
-            if not _G.AllowTeleport then return nil end
-            local targetPlaceId = method == "TeleportAsync" and args[2] or args[1]
-            if targetPlaceId and targetPlaceId ~= MAIN_PLACE_ID then
-                return nil
+        -- ЖОРСТКИЙ ЗАХИСТ ВІД ТЕЛЕПОРТІВ (Блокує Бразилію та телепорти до друзів)
+        if self == TeleportService then
+            -- Блокуємо звичайний Teleport (бо він кидає до друзів)
+            if method == "Teleport" then
+                if _G.AllowTeleport and args[1] == MAIN_PLACE_ID and _G.TargetServerId == nil then
+                    -- Дозволяємо тільки якщо це аварійний реджойн
+                else
+                    print("🛑 ЗАБЛОКОВАНО TELEPORT (може кинути до друга)!")
+                    return nil
+                end
+            end
+            
+            -- Дозволяємо TeleportToPlaceInstance ТІЛЬКИ на наш цільовий сервер
+            if method == "TeleportToPlaceInstance" then
+                if not _G.AllowTeleport then return nil end
+                local id = args[2]
+                if id ~= _G.TargetServerId then
+                    print("🛑 ЗАБЛОКОВАНО ТЕЛЕПОРТ ДО ДРУГА/ІНШОГО СЕРВЕРА!")
+                    return nil
+                end
+            end
+
+            -- Блокуємо TeleportAsync, якщо це не наш сервер
+            if method == "TeleportAsync" then
+                if not _G.AllowTeleport then return nil end
+                local targetPlaceId = args[2]
+                if targetPlaceId and targetPlaceId ~= MAIN_PLACE_ID then
+                    return nil
+                end
             end
         end
 
@@ -62,7 +86,7 @@ if hookmetamethod then
     end))
 end
 
--- АВТО-РЕДЖОЙН ЯКЩО З'ЯВИТЬСЯ ВІКНО ПОМИЛКИ (Profile Loading Error GUI)
+-- АВТО-РЕДЖОЙН ЯКЩО З'ЯВИТЬСЯ ВІКНО ПОМИЛКИ
 task.spawn(function()
     while task.wait(2) do
         pcall(function()
@@ -91,6 +115,7 @@ task.spawn(function()
             if errorFound then
                 print("🚨 ЗНАЙДЕНО ВІКНО ПОМИЛКИ! АВТО-РЕДЖОЙН...")
                 _G.AllowTeleport = true
+                _G.TargetServerId = nil
                 pcall(function() TeleportService:Teleport(MAIN_PLACE_ID, Players.LocalPlayer) end)
             end
         end)
@@ -228,11 +253,12 @@ end)
 
 local OrionLib = loadstring(game:HttpGet("https://raw.githubusercontent.com/Giangplay/Script/main/Orion_Library_PE_V2.lua"))()
 
--- 8. Server Hop (ПОВЕРНУТО СТАРУ НАДІЙНУ ФУНКЦІЮ)
+-- 8. Server Hop (НЕЗАЛЕЖНИЙ, НЕ МОЖЕ ЗАВИСНУТИ)
 local function DoServerHop()
     if _G.IsHopping then return end
     _G.IsHopping = true
     _G.AllowTeleport = true
+    serverStartTime = tick() -- Оновлюємо таймер, щоб дати хопу час
 
     SaveSettings() 
 
@@ -282,33 +308,31 @@ local function DoServerHop()
         if decodeSuccess and decoded and decoded.data then 
             local validServers = {} 
             for _, server in ipairs(decoded.data) do 
-                if type(server) == "table" and server.playing and server.maxPlayers and server.playing < server.maxPlayers and server.id ~= jobId then 
+                -- Шукаємо сервери де менше 10 гравців (щоб точно не попасти на друзів і мати яблука)
+                if type(server) == "table" and server.playing and server.maxPlayers and server.playing < 10 and server.id ~= jobId then 
                     table.insert(validServers, server.id) 
                 end 
             end 
             if #validServers > 0 then 
-                local maxChoices = math.min(5, #validServers)
-                targetServerId = validServers[math.random(1, maxChoices)] 
+                targetServerId = validServers[math.random(1, #validServers)] 
             end 
         end 
     end 
 
     if targetServerId then 
-        -- ПОВЕРНУТО TELEPORTTOPLACEINSTANCE
-        pcall(function() TeleportService:TeleportToPlaceInstance(placeId, targetServerId, Players.LocalPlayer) end)
+        _G.TargetServerId = targetServerId -- Записуємо ID для фільтра
+        -- Запускаємо телепорт в окремому потоці, щоб він НІКОЛИ не завис!
+        task.spawn(function()
+            pcall(function() TeleportService:TeleportToPlaceInstance(placeId, targetServerId, Players.LocalPlayer) end)
+        end)
     else 
-        print("⚠️ Не знайдено сервера, чекаємо 2 секунди...")
+        print("⚠️ Не знайдено порожнього сервера, чекаємо 2 секунди...")
         task.wait(2)
         _G.IsHopping = false
         _G.AllowTeleport = false
+        _G.TargetServerId = nil
         return
     end 
-
-    task.delay(6, function()
-        _G.IsHopping = false 
-        _G.AllowTeleport = false
-        serverStartTime = tick() 
-    end)
 end
 
 if not _G.TeleportHooked then
@@ -317,6 +341,7 @@ if not _G.TeleportHooked then
         if player == Players.LocalPlayer then
             _G.IsHopping = false
             _G.AllowTeleport = false
+            _G.TargetServerId = nil
             task.wait(1.5)
             if _G.SlappleFarm then
                 DoServerHop()
@@ -325,15 +350,15 @@ if not _G.TeleportHooked then
     end)
 end
 
--- 9. АБСОЛЮТНИЙ ТАЙМЕР ANTI-STUCK (25 СЕКУНД)
+-- 9. АБСОЛЮТНИЙ ТАЙМЕР ANTI-STUCK (ПРАЦЮЄ ЗАВЖДИ, НАВІТЬ ЯКЩО ХОП ЗАВИС)
 task.spawn(function()
     while task.wait(1) do
-        if _G.SlappleFarm and not _G.IsHopping then
+        if _G.SlappleFarm then
             if tick() - serverStartTime > 25 then
-                print("⚠️ МИНУЛО 25 СЕКУНД! ПРИМУСОВИЙ ХОП...")
+                print("⚠️ МИНУЛО 25 СЕКУНД! ПРИМУСОВИЙ СКИД ХОПА...")
                 _G.IsHopping = false
                 _G.AllowTeleport = false
-                DoServerHop()
+                _G.TargetServerId = nil
                 serverStartTime = tick() 
             end
         end
@@ -513,7 +538,11 @@ Tab:AddToggle({
 
                         task.wait(3)
                         DoServerHop()
-                        break 
+                        
+                        -- ЧЕКАЄМО, ПОКИ ХОП ЗАВЕРШИТЬСЯ АБО ЗАВИСНЕ (через 25 сек він скинеться сам)
+                        while _G.IsHopping and _G.SlappleFarm do
+                            task.wait(0.5)
+                        end
                     end
                     
                     task.wait(0.2) 
@@ -583,7 +612,7 @@ local BypassTab = Window:MakeTab({
 BypassTab:AddLabel("Anti-Cheat Bypass: ✅ ACTIVE")
 BypassTab:AddParagraph("Знищення клієнтських скриптів", "Скрипт видалив Anti-offset, Antidream, AntiMobileExploits та CodeDetector.")
 BypassTab:AddLabel("Anti-Teleport: ✅ ACTIVE")
-BypassTab:AddParagraph("Абсолютний захист від телепортів", "Будь-який телепорт, окрім Server Hop, блокується наглухо. До друзів не кидає.")
+BypassTab:AddParagraph("Абсолютний захист від телепортів", "Будь-який телепорт, окрім конкретного Server Hop, блокується. До друзів не кидає.")
 BypassTab:AddLabel("Anti-AFK: ✅ ACTIVE")
 BypassTab:AddLabel("Auto-Rejoin: ✅ ACTIVE")
 BypassTab:AddParagraph("Авто-Реджойн", "Якщо виникне помилка Profile Loading Error або кік, скрипт сам перезапустить тебе у гру.")
