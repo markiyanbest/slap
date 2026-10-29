@@ -231,7 +231,8 @@ local autoSlapThread = nil
 local slapReach = 20
 local espThread = nil
 local mainFarmThread = nil
-local localCandyThread = nil
+local inServerCandyThread = nil
+local inServerSlappleThread = nil
 local candyCornListener = nil
 local autoEnterThread = nil
 local tycoonThread = nil
@@ -251,6 +252,8 @@ local serverStartTime = tick()
 _G.AllowTeleport = false
 _G.IsHopping = false
 _G.HopDelay = 2
+_G.StaffKick = false
+_G.AllowStaffKickExecution = false
 
 -- ================= 1. БЕЗПЕКА ТА АНТИ-КІК =================
 if hookmetamethod then
@@ -260,6 +263,12 @@ if hookmetamethod then
         local args = {...}
 
         if self == LocalPlayer and method == "Kick" then
+            -- Якщо кікає наша система захисту від стафу — дозволяємо кік
+            if _G.AllowStaffKickExecution then
+                return oldNamecall(self, ...)
+            end
+
+            -- Якщо кікає сервер/античіт гри — робимо авто-реджойн
             _G.AllowTeleport = true
             task.spawn(function()
                 task.wait(0.5)
@@ -287,21 +296,25 @@ if hookmetamethod then
     end))
 end
 
+-- Авто-реджойн при стандартних помилках гри (якщо немає стафу)
 task.spawn(function()
     while task.wait(3) do
         pcall(function()
-            local prompt = game:GetService("CoreGui"):FindFirstChild("RobloxPromptGui")
-            if prompt and prompt:FindFirstChild("promptOverlay") then
-                local err = prompt.promptOverlay:FindFirstChild("ErrorPrompt", true)
-                if err then
-                    _G.AllowTeleport = true
-                    TeleportService:Teleport(MAIN_PLACE_ID, LocalPlayer)
+            if not _G.AllowStaffKickExecution then
+                local prompt = game:GetService("CoreGui"):FindFirstChild("RobloxPromptGui")
+                if prompt and prompt:FindFirstChild("promptOverlay") then
+                    local err = prompt.promptOverlay:FindFirstChild("ErrorPrompt", true)
+                    if err then
+                        _G.AllowTeleport = true
+                        TeleportService:Teleport(MAIN_PLACE_ID, LocalPlayer)
+                    end
                 end
             end
         end)
     end
 end)
 
+-- Anti-AFK
 if getconnections then
     for _, v in next, getconnections(LocalPlayer.Idled) do
         v:Disable()
@@ -312,6 +325,7 @@ LocalPlayer.Idled:Connect(function()
     VirtualUser:ClickButton2(Vector2.new())
 end)
 
+-- Видалення клієнтських скриптів античіта
 pcall(function()
     local ps = LocalPlayer:WaitForChild("PlayerScripts", 4)
     if ps then
@@ -327,18 +341,7 @@ pcall(function()
     if dr and dr:FindFirstChild("CodeDetector") then dr.CodeDetector:Destroy() end
 end)
 
--- ================= 2. ПЛАТФОРМИ =================
-local safePlatform = Workspace:FindFirstChild("SlappleSafePlatform")
-if not safePlatform then
-    safePlatform = Instance.new("Part")
-    safePlatform.Name = "SlappleSafePlatform"
-    safePlatform.Size = Vector3.new(30, 2, 30)
-    safePlatform.Anchored = true
-    safePlatform.Transparency = 1
-    safePlatform.CanCollide = true
-    safePlatform.Parent = Workspace
-end
-
+-- ================= 2. БЕЗПЕЧНІ ЗОНИ ТА ANTI-VOID =================
 if not Workspace:FindFirstChild("SafeBox") then
     local S = Instance.new("Part", Workspace)
     S.Name = "SafeBox"
@@ -386,7 +389,7 @@ local function SetNoclip(state)
                 local char = LocalPlayer.Character
                 if char then
                     for _, v in ipairs(char:GetChildren()) do
-                        if v:IsA("BasePart") and v.CanCollide and v.Name ~= "SlappleSafePlatform" then
+                        if v:IsA("BasePart") and v.CanCollide then
                             v.CanCollide = false
                         end
                     end
@@ -412,6 +415,7 @@ local function LoadSettings()
             _G.TotalSlapsFarmed = result.TotalSlapsFarmed or 0
             _G.TotalCandyFarmed = result.TotalCandyFarmed or 0
             _G.HopDelay = result.HopDelay or 2
+            _G.StaffKick = result.StaffKick or false
             return
         end
     end
@@ -421,6 +425,7 @@ local function LoadSettings()
     _G.TotalSlapsFarmed = 0
     _G.TotalCandyFarmed = 0
     _G.HopDelay = 2
+    _G.StaffKick = false
 end
 
 local function SaveSettings()
@@ -433,7 +438,8 @@ local function SaveSettings()
                 AutoExecute = _G.AutoExecute,
                 TotalSlapsFarmed = _G.TotalSlapsFarmed,
                 TotalCandyFarmed = _G.TotalCandyFarmed,
-                HopDelay = _G.HopDelay
+                HopDelay = _G.HopDelay,
+                StaffKick = _G.StaffKick
             }))
         end)
     end
@@ -442,6 +448,19 @@ end
 LoadSettings()
 
 local OrionLib = loadstring(game:HttpGet("https://raw.githubusercontent.com/Giangplay/Script/main/Orion_Library_PE_V2.lua"))()
+
+-- ПЕРЕВІРКА ТА АВТО-КІК ПРИ СТАФІ
+local function CheckStaff(p)
+    if not _G.StaffKick or p == LocalPlayer then return end
+    pcall(function()
+        if p:GetRankInGroup(9950771) >= 2 then
+            _G.AllowStaffKickExecution = true
+            LocalPlayer:Kick(string.format("\n[SECURITY KICK]\nStaff member joined: %s (Rank %d).", p.Name, p:GetRankInGroup(9950771)))
+        end
+    end)
+end
+for _, p in ipairs(Players:GetPlayers()) do CheckStaff(p) end
+Players.PlayerAdded:Connect(CheckStaff)
 
 local function DoServerHop()
     if _G.IsHopping then return end
@@ -539,6 +558,7 @@ task.spawn(function()
     end
 end)
 
+-- ВХІД В АРЕНУ ЧЕРЕЗ ПОРТАЛ (БЕЗ ТЕЛЕПОРТУ КУДИСЬ ЩЕ)
 local function EnterArena()
     local char = LocalPlayer.Character
     if char and char:FindFirstChild("Head") and not char:FindFirstChild("entered") then
@@ -550,46 +570,23 @@ local function EnterArena()
     end
 end
 
-local function MoveToHiddenPlatform()
-    local char = LocalPlayer.Character
-    if not char or not char:FindFirstChild("HumanoidRootPart") then return nil end
-    local hrp = char.HumanoidRootPart
-    local arena = Workspace:FindFirstChild("Arena")
-
-    if arena and arena:FindFirstChild("island5") then
-        local island = arena.island5
-        local islandCFrame = island:IsA("Model") and island:GetPivot() or island.CFrame
-        local safeCFrame = islandCFrame * CFrame.new(0, -15, 0)
-        safePlatform.CFrame = islandCFrame * CFrame.new(0, -17, 0)
-
-        if (hrp.Position - safeCFrame.Position).Magnitude > 5 then
-            pcall(function()
-                hrp.CFrame = safeCFrame
-                hrp.AssemblyLinearVelocity = Vector3.zero
-            end)
-        end
-    end
-    return hrp
-end
-
--- ================= ЗБІР ЯБЛУК ТА ЦУКЕРОК =================
-local function FastLootSlapples()
+-- ================= ЧИСТЕ ЛУТАННЯ БЕЗ ЗМІНИ CFRAME (0 ТЕЛЕПОРТІВ) =================
+local function ZeroTpLootSlapples()
     local char = LocalPlayer.Character
     local leaderstats = LocalPlayer:FindFirstChild("leaderstats")
     local startSlaps = (leaderstats and leaderstats:FindFirstChild("Slaps")) and leaderstats.Slaps.Value or 0
 
     if char and char:FindFirstChild("HumanoidRootPart") and char:FindFirstChild("entered") then
-        MoveToHiddenPlatform()
         local arena = Workspace:FindFirstChild("Arena")
         if arena and arena:FindFirstChild("island5") and arena.island5:FindFirstChild("Slapples") then
-            for _ = 1, 5 do
+            for _ = 1, 4 do
                 for _, v in ipairs(arena.island5.Slapples:GetChildren()) do
                     if (v.Name == "Slapple" or v.Name == "GoldenSlapple") and v:FindFirstChild("Glove") and v.Glove:FindFirstChildWhichIsA("TouchTransmitter") then
                         firetouchinterest(char.HumanoidRootPart, v.Glove, 0)
                         firetouchinterest(char.HumanoidRootPart, v.Glove, 1)
                     end
                 end
-                task.wait(0.06)
+                task.wait(0.05)
             end
         end
     end
@@ -603,16 +600,15 @@ local function FastLootSlapples()
     return gained
 end
 
-local function FastLootCandy()
+local function ZeroTpLootCandy()
     local char = LocalPlayer.Character
-    if not char or not char:FindFirstChild("Head") then return 0 end
+    if not char or not char:FindFirstChild("Head") or not char:FindFirstChild("entered") then return 0 end
 
-    MoveToHiddenPlatform()
     local candyFolder = Workspace:FindFirstChild("CandyCorns")
     if not candyFolder then return 0 end
 
     local touched = 0
-    for _ = 1, 6 do
+    for _ = 1, 4 do
         if not char:FindFirstChild("Head") then break end
         for _, v in ipairs(candyFolder:GetChildren()) do
             if v:FindFirstChildWhichIsA("TouchTransmitter") then
@@ -621,7 +617,7 @@ local function FastLootCandy()
                 firetouchinterest(char.Head, v, 1)
             end
         end
-        task.wait(0.06)
+        task.wait(0.05)
     end
 
     if touched > 0 then
@@ -631,28 +627,29 @@ local function FastLootCandy()
     return touched
 end
 
+-- ГОЛОВНИЙ ЦИКЛ: ЗАЙШОВ В АРЕНУ -> ЗЛУТАВ НА МІСЦІ -> ЗМІНИВ СЕРВЕР (0 ПАЛИВА)
 local function UpdateMainFarmLoop()
-    SetNoclip(_G.SlappleFarm or _G.CandyCornFarm)
-
     if _G.SlappleFarm or _G.CandyCornFarm then
         if not mainFarmThread then
             mainFarmThread = task.spawn(function()
                 while _G.SlappleFarm or _G.CandyCornFarm do
                     local char = LocalPlayer.Character
 
+                    -- Заходимо в портал, якщо ще не на арені
                     if char and not char:FindFirstChild("entered") then
                         EnterArena()
                         task.wait(0.4)
                     end
 
+                    -- Стоячи на місці спавну арени, моментально збираємо все й одразу на інший сервер
                     if char and char:FindFirstChild("entered") then
-                        local slaps = _G.SlappleFarm and FastLootSlapples() or 0
-                        local candies = _G.CandyCornFarm and FastLootCandy() or 0
+                        local slaps = _G.SlappleFarm and ZeroTpLootSlapples() or 0
+                        local candies = _G.CandyCornFarm and ZeroTpLootCandy() or 0
 
                         if slaps > 0 or candies > 0 then
                             pcall(function()
                                 OrionLib:MakeNotification({
-                                    Name = "Autofarm",
+                                    Name = "0-TP Autofarm",
                                     Content = string.format("+%d Slaps | +%d Candy", slaps, candies),
                                     Image = "rbxassetid://7734053426",
                                     Time = 1.5
@@ -676,7 +673,7 @@ local function UpdateMainFarmLoop()
     end
 end
 
--- ================= ПОЛІТ =================
+-- ================= 5. ПОЛІТ ТА ХІТБОКС =================
 local function SetFly(state, speed)
     local char = LocalPlayer.Character
     if not char or not char:FindFirstChild("HumanoidRootPart") then return end
@@ -737,7 +734,6 @@ local function SetFly(state, speed)
     end
 end
 
--- ================= HITBOX EXPANDER =================
 local function SetHitbox(state)
     hitboxThread = StopThread(hitboxThread)
     if state then
@@ -771,7 +767,7 @@ local function SetHitbox(state)
     end
 end
 
--- ================= EVENT-DRIVEN ANTI МОДУЛІ =================
+-- ================= 6. EVENT-DRIVEN ANTI МОДУЛІ =================
 local function SetAntiObstacles(val)
     _G.AntiObstacles = val
     if obstacleConn then obstacleConn:Disconnect(); obstacleConn = nil end
@@ -864,9 +860,9 @@ local function SetAntiRagdoll(val)
     end
 end
 
--- ================= 5. ІНТЕРФЕЙС =================
+-- ================= 7. ІНТЕРФЕЙС =================
 local Window = OrionLib:MakeWindow({
-    Name = "Slap Battles Hub [Ultimate] 👏",
+    Name = "Slap Battles Hub [Legit 0-TP] 👏",
     IntroText = "Slap Battles 👏",
     IntroIcon = "rbxassetid://15315284749",
     HidePremium = false,
@@ -889,7 +885,7 @@ task.spawn(function()
     end
 end)
 
-local HopSection = FarmTab:AddSection({Name = "Server-Hop Farm (0 Палива)"})
+local HopSection = FarmTab:AddSection({Name = "Server-Hop Farm (0 Палива: Портал -> Лут на місці -> Hop)"})
 
 HopSection:AddSlider({
     Name = "Delay before Server Hop (sec)", 
@@ -901,7 +897,7 @@ HopSection:AddSlider({
 })
 
 HopSection:AddToggle({
-    Name = "Autofarm Slapples (+ Server Hop)", 
+    Name = "Autofarm Slapples (+ Hop | 0 TP)", 
     Default = _G.SlappleFarm, 
     Callback = function(Value)
         _G.SlappleFarm = Value
@@ -911,7 +907,7 @@ HopSection:AddToggle({
 })
 
 HopSection:AddToggle({
-    Name = "Autofarm Candy Corn (+ Server Hop)", 
+    Name = "Autofarm Candy Corn (+ Hop | 0 TP)", 
     Default = _G.CandyCornFarm, 
     Callback = function(Value)
         _G.CandyCornFarm = Value
@@ -920,23 +916,21 @@ HopSection:AddToggle({
     end
 })
 
-local InServerSection = FarmTab:AddSection({Name = "In-Server Farm (Без виходу з сервера)"})
+local InServerSection = FarmTab:AddSection({Name = "In-Server Farm (Без зміни сервера та БЕЗ ТП)"})
 
--- АВТО-ЛУТАННЯ CANDY CORN БЕЗ ВИХОДУ
+-- ЗБІР CANDY CORN БЕЗ ВИХОДУ ТА БЕЗ ТЕПАННЯ
 InServerSection:AddToggle({
-    Name = "Candy Corn Farm (In-Server / No Hop)",
+    Name = "Candy Corn Farm (In-Server / Zero TP)",
     Default = false,
     Callback = function(Value)
         _G.InServerCandy = Value
-        localCandyThread = StopThread(localCandyThread)
+        inServerCandyThread = StopThread(inServerCandyThread)
         if candyCornListener then candyCornListener:Disconnect(); candyCornListener = nil end
 
         if Value then
-            SetNoclip(true)
-
             local function LootOneCandy(item)
                 local char = LocalPlayer.Character
-                if char and char:FindFirstChild("Head") and item:FindFirstChildWhichIsA("TouchTransmitter") then
+                if char and char:FindFirstChild("Head") and char:FindFirstChild("entered") and item:FindFirstChildWhichIsA("TouchTransmitter") then
                     pcall(function()
                         firetouchinterest(char.Head, item, 0)
                         firetouchinterest(char.Head, item, 1)
@@ -956,18 +950,11 @@ InServerSection:AddToggle({
                 end)
             end
 
-            localCandyThread = task.spawn(function()
+            inServerCandyThread = task.spawn(function()
                 while _G.InServerCandy do
                     local char = LocalPlayer.Character
-                    if char and not char:FindFirstChild("entered") then
-                        EnterArena()
-                        task.wait(0.4)
-                    end
-
-                    MoveToHiddenPlatform()
-
                     local folder = Workspace:FindFirstChild("CandyCorns")
-                    if folder and char and char:FindFirstChild("Head") then
+                    if folder and char and char:FindFirstChild("Head") and char:FindFirstChild("entered") then
                         for _, v in ipairs(folder:GetChildren()) do
                             LootOneCandy(v)
                         end
@@ -980,24 +967,17 @@ InServerSection:AddToggle({
 })
 
 InServerSection:AddToggle({
-    Name = "Slapples Farm (In-Server / No Hop)",
+    Name = "Slapples Farm (In-Server / Zero TP)",
     Default = false,
     Callback = function(Value)
-        _G.NoHopSlapples = Value
-        noHopSlappleThread = StopThread(noHopSlappleThread)
+        _G.InServerSlapples = Value
+        inServerSlappleThread = StopThread(inServerSlappleThread)
+
         if Value then
-            SetNoclip(true)
-            noHopSlappleThread = task.spawn(function()
-                while _G.NoHopSlapples do
+            inServerSlappleThread = task.spawn(function()
+                while _G.InServerSlapples do
                     local char = LocalPlayer.Character
-                    if char and not char:FindFirstChild("entered") then
-                        EnterArena()
-                        task.wait(0.4)
-                    end
-
-                    MoveToHiddenPlatform()
-
-                    if char and char:FindFirstChild("HumanoidRootPart") and Workspace:FindFirstChild("Arena") and Workspace.Arena:FindFirstChild("island5") then
+                    if char and char:FindFirstChild("HumanoidRootPart") and char:FindFirstChild("entered") and Workspace:FindFirstChild("Arena") and Workspace.Arena:FindFirstChild("island5") then
                         for _, v in ipairs(Workspace.Arena.island5.Slapples:GetChildren()) do
                             if (v.Name == "Slapple" or v.Name == "GoldenSlapple") and v:FindFirstChild("Glove") and v.Glove:FindFirstChildWhichIsA("TouchTransmitter") then
                                 firetouchinterest(char.HumanoidRootPart, v.Glove, 0)
@@ -1013,7 +993,7 @@ InServerSection:AddToggle({
 })
 
 InServerSection:AddToggle({
-    Name = "Auto-Enter Arena (Always Alive in Arena)",
+    Name = "Auto-Enter Arena (Always Active)",
     Default = false,
     Callback = function(Value)
         _G.AutoEnterArenaLoop = Value
@@ -1090,7 +1070,6 @@ CombatTab:AddToggle({
                                         local rag = tChar:FindFirstChild("Ragdolled")
                                         if not rag or rag.Value == false then
                                             local head = tChar:FindFirstChild("Head")
-                                            -- Захист: пропускаємо гравців під Uno Reverse, щоб не вбивати себе
                                             if not head or not head:FindFirstChild("UnoReverseCard") or myGlove == "Error" then
                                                 if (myHrp.Position - tHrp.Position).Magnitude <= slapReach then
                                                     local targetPart = tChar:FindFirstChild(slapAuraTargetPart) or tHrp
@@ -1122,36 +1101,24 @@ CombatTab:AddToggle({
     Callback = function(Value) SetHitbox(Value) end
 })
 
--- ВКЛАДКА 3: ANTI & DETECTORS
-local AntiTab = Window:MakeTab({Name = "Anti & Bypass", Icon = "rbxassetid://7734056608", PremiumOnly = false})
+-- ВКЛАДКА 3: ANTI & SECURITY
+local AntiTab = Window:MakeTab({Name = "Anti & Security", Icon = "rbxassetid://7734056608", PremiumOnly = false})
 
--- ДЕТЕКТОР АДМІНІВ З ПЕРЕВІРКОЮ РАНГУ
+-- АВТО-КІК ПРИ СТАФІ З ВІДКЛЮЧЕННЯМ ВІД СЕРВЕРА
 AntiTab:AddToggle({
-    Name = "Admin / Mod Join Alert",
-    Default = true,
+    Name = "Auto-Kick on Staff Join (Rank >= 2)",
+    Default = _G.StaffKick,
     Callback = function(Value)
-        _G.AdminAlert = Value
+        _G.StaffKick = Value
+        SaveSettings()
+        if Value then
+            for _, p in ipairs(Players:GetPlayers()) do CheckStaff(p) end
+        end
     end
 })
 
-local function CheckAdmin(p)
-    if not _G.AdminAlert or p == LocalPlayer then return end
-    pcall(function()
-        if p:GetRankInGroup(9950771) >= 2 then
-            OrionLib:MakeNotification({
-                Name = "⚠️ STAFF DETECTED!",
-                Content = string.format("Mod/Admin %s joined the server!", p.Name),
-                Image = "rbxassetid://7733658504",
-                Time = 8
-            })
-        end
-    end)
-end
-for _, p in ipairs(Players:GetPlayers()) do CheckAdmin(p) end
-Players.PlayerAdded:Connect(CheckAdmin)
-
 AntiTab:AddToggle({
-    Name = "Anti Void (Solid Platform)",
+    Name = "Anti Void (Solid Floor)",
     Default = false,
     Callback = function(Value)
         if Workspace:FindFirstChild("VoidPart") then
@@ -1464,7 +1431,6 @@ MovementTab:AddToggle({
                                 local esp = v.Character.Head:FindFirstChild("GloveEsp")
                                 if not esp then
                                     esp = Instance.new("BillboardGui", v.Character.Head)
-                                    esp.Adornee = v.Character.Head
                                     esp.Name = "GloveEsp"
                                     esp.Size = UDim2.new(0, 100, 0, 150)
                                     esp.StudsOffset = Vector3.new(0, 3, 0)
