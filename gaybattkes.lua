@@ -1,6 +1,6 @@
 if not game:IsLoaded() then game.Loaded:Wait() end
 
--- ================= ЗАХИСТ ВІД ERROR 267 ТА КРАШУ ПРИ ВХОДІ =================
+-- ================= ЗАХИСТ ВІД ERROR 267 ТА ПОВНЕ ЗАВАНТАЖЕННЯ =================
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 
@@ -28,6 +28,7 @@ local GuiService = game:GetService("GuiService")
 local MAIN_PLACE_ID = 6403373529 
 local GITHUB_RAW_URL = "https://raw.githubusercontent.com/markiyanbest/slap/main/gaybattkes.lua"
 local ConfigFile = "SlappleFarm_Settings.json"
+local VisitedServersFile = "Slap_VisitedServers.json"
 
 pcall(function() GuiService:ClearError() end)
 
@@ -37,19 +38,35 @@ if game.PlaceId ~= MAIN_PLACE_ID and game.PlaceId ~= 9015014224 then
     return 
 end
 
--- ================= ОЧИЩЕННЯ ПАМ'ЯТІ (АНТИ-КРАШ) =================
-local function ClearMemoryBeforeHop()
-    pcall(function()
-        for _, v in ipairs(Workspace:GetChildren()) do
-            if v:IsA("Debris") or v.Name == "Part" and v.ClassName == "Part" then
-                v:Destroy()
+-- ================= БАЗА ВІДВІДАНИХ СЕРВЕРІВ (20 ХВ ЧОРНИЙ СПИСОК) =================
+local function GetVisitedServers()
+    if isfile and readfile and isfile(VisitedServersFile) then
+        local success, result = pcall(function() return HttpService:JSONDecode(readfile(VisitedServersFile)) end)
+        if success and type(result) == "table" then
+            local now = os.time()
+            local cleaned = {}
+            for id, timestamp in pairs(result) do
+                -- Зберігаємо сервери лише за останні 20 хвилин (1200 секунд)
+                if type(timestamp) == "number" and (now - timestamp) < 1200 then
+                    cleaned[id] = timestamp
+                end
             end
+            return cleaned
         end
-        if collectgarbage then
-            collectgarbage("collect")
-        end
+    end
+    return {}
+end
+
+local function SaveCurrentServerVisited()
+    if not writefile then return end
+    local visited = GetVisitedServers()
+    visited[game.JobId] = os.time()
+    pcall(function()
+        writefile(VisitedServersFile, HttpService:JSONEncode(visited))
     end)
 end
+
+SaveCurrentServerVisited()
 
 -- ================= ТАБЛИЦЯ УДАРІВ =================
 local gloveHits = {
@@ -422,18 +439,19 @@ end
 for _, p in ipairs(Players:GetPlayers()) do CheckStaff(p) end
 Players.PlayerAdded:Connect(CheckStaff)
 
+-- СЕРВЕРХОП ІЗ ФІЛЬТРАЦІЄЮ ВІДВІДАНИХ (20 ХВИЛИН)
 local function DoServerHop()
     if _G.IsHopping then return end
     _G.IsHopping = true
     _G.AllowTeleport = true
     serverStartTime = tick()
     SaveSettings() 
-    ClearMemoryBeforeHop()
+    SaveCurrentServerVisited()
 
     pcall(function()
         OrionLib:MakeNotification({ 
             Name = "Server Hop", 
-            Content = "All items collected! Hopping...", 
+            Content = "Searching for fresh server (20m unique)...", 
             Image = "rbxassetid://7734053426", 
             Time = 1.5 
         }) 
@@ -459,14 +477,26 @@ local function DoServerHop()
     if success and response then 
         local decodeSuccess, decoded = pcall(function() return HttpService:JSONDecode(response) end) 
         if decodeSuccess and decoded and decoded.data then 
+            local visited = GetVisitedServers()
             local validServers = {} 
+            local fallbackServers = {}
+
             for _, server in ipairs(decoded.data) do 
-                if type(server) == "table" and server.playing and server.maxPlayers and server.playing < server.maxPlayers and server.id ~= jobId then 
-                    table.insert(validServers, server.id) 
+                if type(server) == "table" and server.id and server.id ~= jobId and server.playing and server.maxPlayers and server.playing < server.maxPlayers then 
+                    local isVisited = visited[server.id] ~= nil
+                    if not isVisited then
+                        table.insert(validServers, server.id) 
+                    else
+                        table.insert(fallbackServers, server.id)
+                    end
                 end 
             end 
+
+            -- Пріоритет: суворо сервери, на яких не були останні 20 хвилин
             if #validServers > 0 then 
                 targetServerId = validServers[math.random(1, #validServers)] 
+            elseif #fallbackServers > 0 then
+                targetServerId = fallbackServers[math.random(1, #fallbackServers)]
             end 
         end 
     end 
@@ -538,12 +568,11 @@ local function EnterArena()
     return false
 end
 
--- ================= АКТИВНЕ ЛУТАННЯ ДО ОСТАННЬОЇ ЦУКЕРКИ/ЯБЛУКА =================
+-- ================= ЗБІР З ТОЧНИМ ОБЛІКОМ 1 В 1 =================
 local function HarvestSlapples()
     local c = LocalPlayer.Character
     local lstats = LocalPlayer:FindFirstChild("leaderstats")
     local startSlaps = (lstats and lstats:FindFirstChild("Slaps")) and lstats.Slaps.Value or 0
-    local collected = false
 
     if c and c:FindFirstChild("HumanoidRootPart") and c:FindFirstChild("entered") then
         local arena = Workspace:FindFirstChild("Arena")
@@ -551,33 +580,39 @@ local function HarvestSlapples()
             for _, v in ipairs(arena.island5.Slapples:GetChildren()) do
                 if (v.Name == "Slapple" or v.Name == "GoldenSlapple") and v:FindFirstChild("Glove") and v.Glove:FindFirstChildWhichIsA("TouchTransmitter") then
                     firetouchinterest(c.HumanoidRootPart, v.Glove, 0)
+                    task.wait()
                     firetouchinterest(c.HumanoidRootPart, v.Glove, 1)
-                    collected = true
                 end
             end
         end
     end
 
+    task.wait(0.08)
     local endSlaps = (lstats and lstats:FindFirstChild("Slaps")) and lstats.Slaps.Value or 0
     local gained = math.max(0, endSlaps - startSlaps)
     if gained > 0 then
         _G.TotalSlapsFarmed = _G.TotalSlapsFarmed + gained
         SaveSettings()
     end
-    return collected, gained
+    return gained
 end
 
+-- ТОЧНИЙ ПІДРАХУНОК: 1 ЦУКЕРКА = 1 ДОТИК = РІВНО +1
 local function HarvestCandy()
     local c = LocalPlayer.Character
-    if not c or not c:FindFirstChild("Head") or not c:FindFirstChild("entered") then return false, 0 end
+    if not c or not c:FindFirstChild("Head") or not c:FindFirstChild("entered") then return 0 end
 
     local candyFolder = Workspace:FindFirstChild("CandyCorns")
-    if not candyFolder then return false, 0 end
+    if not candyFolder then return 0 end
 
+    local touchedSet = {}
     local count = 0
+
     for _, v in ipairs(candyFolder:GetChildren()) do
-        if v:FindFirstChildWhichIsA("TouchTransmitter") then
+        if v:FindFirstChildWhichIsA("TouchTransmitter") and not touchedSet[v] then
+            touchedSet[v] = true
             firetouchinterest(c.Head, v, 0)
+            task.wait()
             firetouchinterest(c.Head, v, 1)
             count = count + 1
         end
@@ -587,10 +622,10 @@ local function HarvestCandy()
         _G.TotalCandyFarmed = _G.TotalCandyFarmed + count
         SaveSettings()
     end
-    return (count > 0), count
+    return count
 end
 
--- ================= ГОЛОВНИЙ ЦИКЛ ЗБОРУ (ЗБИРАЄ ВСЕ ПЕРЕД ТЕЛЕПОРТОМ) =================
+-- ГОЛОВНИЙ ЦИКЛ: ВХІД -> МИТТЄВИЙ ЛУТ УСЬОГО -> ОДРАЗУ НА НАСТУПНИЙ СЕРВЕР
 local function UpdateMainFarmLoop()
     if _G.SlappleFarm or _G.CandyCornFarm then
         if not mainFarmThread then
@@ -603,56 +638,29 @@ local function UpdateMainFarmLoop()
                         task.wait(0.3)
                     end
 
-                    if c and c:FindFirstChild("entered") then
-                        local totalSlaps = 0
-                        local totalCandies = 0
+                    -- Коли на арені — робимо один чистий лут і ОДРАЗУ виходимо
+                    if c and c:FindFirstChild("entered") and not _G.IsHopping then
+                        local slaps = _G.SlappleFarm and HarvestSlapples() or 0
+                        local candies = _G.CandyCornFarm and HarvestCandy() or 0
 
-                        -- Фаза зачистки: перевіряємо, поки з'являються нові предмети
-                        local cleanPasses = 0
-                        local maxChecks = 10 -- До 10 перевірок (займає ~0.5-0.8 с)
+                        -- Одразу блокуємо подальший збір — якщо з'являється нова цукерка, ігноруємо її та хопаємо
+                        _G.IsHopping = true
 
-                        for _ = 1, maxChecks do
-                            local hadSlapple, gainedS = false, 0
-                            local hadCandy, gainedC = false, 0
-
-                            if _G.SlappleFarm then
-                                hadSlapple, gainedS = HarvestSlapples()
-                                totalSlaps = totalSlaps + gainedS
-                            end
-
-                            if _G.CandyCornFarm then
-                                hadCandy, gainedC = HarvestCandy()
-                                totalCandies = totalCandies + gainedC
-                            end
-
-                            if not hadSlapple and not hadCandy then
-                                cleanPasses = cleanPasses + 1
-                                if cleanPasses >= 2 then
-                                    -- Карта повністю чиста, нічого нового не з'явилося
-                                    break
-                                end
-                            else
-                                cleanPasses = 0
-                            end
-                            task.wait(0.06)
-                        end
-
-                        if totalSlaps > 0 or totalCandies > 0 then
+                        if slaps > 0 or candies > 0 then
                             pcall(function()
                                 OrionLib:MakeNotification({
-                                    Name = "Harvest Complete",
-                                    Content = string.format("+%d Slaps | +%d Candy. Hopping...", totalSlaps, totalCandies),
+                                    Name = "Looted & Hopping",
+                                    Content = string.format("+%d Slaps | +%d Candy (Unique)", slaps, candies),
                                     Image = "rbxassetid://7734053426",
                                     Time = 1.5
                                 })
                             end)
                         end
 
-                        -- Тільки коли все злутано — робимо затримку безпеки і міняємо сервер
                         task.wait(_G.HopDelay)
                         DoServerHop()
 
-                        while _G.IsHopping and (_G.SlappleFarm or _G.CandyCornFarm) do
+                        while _G.IsHopping do
                             task.wait(0.5)
                         end
                     end
@@ -855,7 +863,7 @@ end
 
 -- ================= 5. ІНТЕРФЕЙС =================
 local Window = OrionLib:MakeWindow({
-    Name = "Slap Battles Hub [Anti-Crash | 0-TP] 👏",
+    Name = "Slap Battles Hub [Legit 0-TP] 👏",
     IntroText = "Slap Battles 👏",
     IntroIcon = "rbxassetid://15315284749",
     HidePremium = false,
@@ -878,7 +886,7 @@ task.spawn(function()
     end
 end)
 
-local HopSection = FarmTab:AddSection({Name = "Server-Hop Farm (Чистить усе -> Hop)"})
+local HopSection = FarmTab:AddSection({Name = "Server-Hop Farm (20m Unique Servers)"})
 
 HopSection:AddSlider({
     Name = "Delay before Server Hop (sec)", 
@@ -925,6 +933,7 @@ InServerSection:AddToggle({
                 if c and c:FindFirstChild("Head") and c:FindFirstChild("entered") and item:FindFirstChildWhichIsA("TouchTransmitter") then
                     pcall(function()
                         firetouchinterest(c.Head, item, 0)
+                        task.wait()
                         firetouchinterest(c.Head, item, 1)
                         _G.TotalCandyFarmed = _G.TotalCandyFarmed + 1
                         SaveSettings()
@@ -973,6 +982,7 @@ InServerSection:AddToggle({
                         for _, v in ipairs(Workspace.Arena.island5.Slapples:GetChildren()) do
                             if (v.Name == "Slapple" or v.Name == "GoldenSlapple") and v:FindFirstChild("Glove") and v.Glove:FindFirstChildWhichIsA("TouchTransmitter") then
                                 firetouchinterest(c.HumanoidRootPart, v.Glove, 0)
+                                task.wait()
                                 firetouchinterest(c.HumanoidRootPart, v.Glove, 1)
                             end
                         end
