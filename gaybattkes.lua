@@ -38,7 +38,7 @@ if game.PlaceId ~= MAIN_PLACE_ID and game.PlaceId ~= 9015014224 then
     return 
 end
 
--- ================= БАЗА ВІДВІДАНИХ СЕРВЕРІВ (20 ХВ ЧОРНИЙ СПИСОК) =================
+-- ================= 20-ХВИЛИННИЙ ЧОРНИЙ СПИСОК СЕРВЕРІВ =================
 local function GetVisitedServers()
     if isfile and readfile and isfile(VisitedServersFile) then
         local success, result = pcall(function() return HttpService:JSONDecode(readfile(VisitedServersFile)) end)
@@ -46,7 +46,6 @@ local function GetVisitedServers()
             local now = os.time()
             local cleaned = {}
             for id, timestamp in pairs(result) do
-                -- Зберігаємо сервери лише за останні 20 хвилин (1200 секунд)
                 if type(timestamp) == "number" and (now - timestamp) < 1200 then
                     cleaned[id] = timestamp
                 end
@@ -298,7 +297,7 @@ _G.HopDelay = 3.5
 _G.StaffKick = false
 _G.AllowStaffKickExecution = false
 
--- ================= 1. БЕЗПЕКА ТА АНТИ-КІК =================
+-- ================= БЕЗПЕКА ТА АНТИ-КІК =================
 if hookmetamethod then
     local oldNamecall
     oldNamecall = hookmetamethod(game, "__namecall", newcclosure(function(self, ...)
@@ -381,7 +380,7 @@ pcall(function()
     if dr and dr:FindFirstChild("CodeDetector") then dr.CodeDetector:Destroy() end
 end)
 
--- ================= 2. КОНФІГ ТА СЕРВЕРХОП =================
+-- ================= КОНФІГ =================
 local function LoadSettings()
     if isfile and readfile and isfile(ConfigFile) then
         local success, result = pcall(function() return HttpService:JSONDecode(readfile(ConfigFile)) end)
@@ -439,7 +438,7 @@ end
 for _, p in ipairs(Players:GetPlayers()) do CheckStaff(p) end
 Players.PlayerAdded:Connect(CheckStaff)
 
--- СЕРВЕРХОП ІЗ ФІЛЬТРАЦІЄЮ ВІДВІДАНИХ (20 ХВИЛИН)
+-- ================= РОБОЧИЙ СЕРВЕРХОП (ВИПРАВЛЕНО БАГ З БЛОКУВАННЯМ) =================
 local function DoServerHop()
     if _G.IsHopping then return end
     _G.IsHopping = true
@@ -483,8 +482,7 @@ local function DoServerHop()
 
             for _, server in ipairs(decoded.data) do 
                 if type(server) == "table" and server.id and server.id ~= jobId and server.playing and server.maxPlayers and server.playing < server.maxPlayers then 
-                    local isVisited = visited[server.id] ~= nil
-                    if not isVisited then
+                    if not visited[server.id] then
                         table.insert(validServers, server.id) 
                     else
                         table.insert(fallbackServers, server.id)
@@ -492,7 +490,6 @@ local function DoServerHop()
                 end 
             end 
 
-            -- Пріоритет: суворо сервери, на яких не були останні 20 хвилин
             if #validServers > 0 then 
                 targetServerId = validServers[math.random(1, #validServers)] 
             elseif #fallbackServers > 0 then
@@ -597,7 +594,7 @@ local function HarvestSlapples()
     return gained
 end
 
--- ТОЧНИЙ ПІДРАХУНОК: 1 ЦУКЕРКА = 1 ДОТИК = РІВНО +1
+-- 1 ЦУКЕРКА = 1 ДОТИК = РІВНО +1
 local function HarvestCandy()
     local c = LocalPlayer.Character
     if not c or not c:FindFirstChild("Head") or not c:FindFirstChild("entered") then return 0 end
@@ -625,7 +622,7 @@ local function HarvestCandy()
     return count
 end
 
--- ГОЛОВНИЙ ЦИКЛ: ВХІД -> МИТТЄВИЙ ЛУТ УСЬОГО -> ОДРАЗУ НА НАСТУПНИЙ СЕРВЕР
+-- ================= ГОЛОВНИЙ ЦИКЛ (ЗБІР -> ОДРАЗУ НА НАСТУПНИЙ СЕРВЕР) =================
 local function UpdateMainFarmLoop()
     if _G.SlappleFarm or _G.CandyCornFarm then
         if not mainFarmThread then
@@ -638,19 +635,15 @@ local function UpdateMainFarmLoop()
                         task.wait(0.3)
                     end
 
-                    -- Коли на арені — робимо один чистий лут і ОДРАЗУ виходимо
                     if c and c:FindFirstChild("entered") and not _G.IsHopping then
                         local slaps = _G.SlappleFarm and HarvestSlapples() or 0
                         local candies = _G.CandyCornFarm and HarvestCandy() or 0
 
-                        -- Одразу блокуємо подальший збір — якщо з'являється нова цукерка, ігноруємо її та хопаємо
-                        _G.IsHopping = true
-
                         if slaps > 0 or candies > 0 then
                             pcall(function()
                                 OrionLib:MakeNotification({
-                                    Name = "Looted & Hopping",
-                                    Content = string.format("+%d Slaps | +%d Candy (Unique)", slaps, candies),
+                                    Name = "Looted",
+                                    Content = string.format("+%d Slaps | +%d Candy. Hopping...", slaps, candies),
                                     Image = "rbxassetid://7734053426",
                                     Time = 1.5
                                 })
@@ -658,6 +651,7 @@ local function UpdateMainFarmLoop()
                         end
 
                         task.wait(_G.HopDelay)
+                        -- Викликаємо Server Hop без попереднього блокування прапорцем
                         DoServerHop()
 
                         while _G.IsHopping do
@@ -674,7 +668,7 @@ local function UpdateMainFarmLoop()
     end
 end
 
--- ================= 3. ПОЛІТ ТА ХІТБОКС =================
+-- ================= ПОЛІТ ТА ХІТБОКС =================
 local function SetFly(state, speed)
     local c = LocalPlayer.Character
     if not c or not c:FindFirstChild("HumanoidRootPart") then return end
@@ -768,7 +762,7 @@ local function SetHitbox(state)
     end
 end
 
--- ================= 4. ANTI МОДУЛІ =================
+-- ================= ANTI МОДУЛІ =================
 local function SetAntiObstacles(val)
     _G.AntiObstacles = val
     if obstacleConn then obstacleConn:Disconnect(); obstacleConn = nil end
@@ -861,7 +855,7 @@ local function SetAntiRagdoll(val)
     end
 end
 
--- ================= 5. ІНТЕРФЕЙС =================
+-- ================= ІНТЕРФЕЙС =================
 local Window = OrionLib:MakeWindow({
     Name = "Slap Battles Hub [Legit 0-TP] 👏",
     IntroText = "Slap Battles 👏",
@@ -928,9 +922,11 @@ InServerSection:AddToggle({
         if candyCornListener then candyCornListener:Disconnect(); candyCornListener = nil end
 
         if Value then
+            local touchedSetInServer = {}
             local function LootOneCandy(item)
                 local c = LocalPlayer.Character
-                if c and c:FindFirstChild("Head") and c:FindFirstChild("entered") and item:FindFirstChildWhichIsA("TouchTransmitter") then
+                if c and c:FindFirstChild("Head") and c:FindFirstChild("entered") and item:FindFirstChildWhichIsA("TouchTransmitter") and not touchedSetInServer[item] then
+                    touchedSetInServer[item] = true
                     pcall(function()
                         firetouchinterest(c.Head, item, 0)
                         task.wait()
