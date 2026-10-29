@@ -1,7 +1,6 @@
 if not game:IsLoaded() then game.Loaded:Wait() end
 
--- ================= ЗАХИСТ ВІД ERROR 267 (DATA LOSS CHECK) =================
--- Чекаємо повного завантаження персонажа та DataStore профілю перед будь-якими діями
+-- ================= ЗАХИСТ ВІД ERROR 267 ТА КРАШУ ПРИ ВХОДІ =================
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 
@@ -14,8 +13,7 @@ if leaderstats then
     leaderstats:WaitForChild("Glove", 15)
 end
 
--- Пауза, щоб сервер зняв лок DataStore сесії
-task.wait(2)
+task.wait(1.5)
 
 local HttpService = game:GetService("HttpService")
 local TeleportService = game:GetService("TeleportService")
@@ -37,6 +35,20 @@ if game.PlaceId ~= MAIN_PLACE_ID and game.PlaceId ~= 9015014224 then
     _G.AllowTeleport = true
     pcall(function() TeleportService:Teleport(MAIN_PLACE_ID, LocalPlayer) end)
     return 
+end
+
+-- ================= ОЧИЩЕННЯ ПАМ'ЯТІ (АНТИ-КРАШ) =================
+local function ClearMemoryBeforeHop()
+    pcall(function()
+        for _, v in ipairs(Workspace:GetChildren()) do
+            if v:IsA("Debris") or v.Name == "Part" and v.ClassName == "Part" then
+                v:Destroy()
+            end
+        end
+        if collectgarbage then
+            collectgarbage("collect")
+        end
+    end)
 end
 
 -- ================= ТАБЛИЦЯ УДАРІВ =================
@@ -265,7 +277,7 @@ end
 local serverStartTime = tick()
 _G.AllowTeleport = false
 _G.IsHopping = false
-_G.HopDelay = 4 -- Збільшено до 4 секунд, щоб не ловити Error 267 Data Loss
+_G.HopDelay = 3.5
 _G.StaffKick = false
 _G.AllowStaffKickExecution = false
 
@@ -282,7 +294,7 @@ if hookmetamethod then
             end
             _G.AllowTeleport = true
             task.spawn(function()
-                task.wait(1.5)
+                task.wait(1)
                 pcall(function() TeleportService:Teleport(MAIN_PLACE_ID, LocalPlayer) end)
             end)
             return nil 
@@ -307,7 +319,6 @@ if hookmetamethod then
     end))
 end
 
--- Авто-реджойн при помилках
 task.spawn(function()
     while task.wait(3) do
         pcall(function()
@@ -325,7 +336,7 @@ task.spawn(function()
     end
 end)
 
--- БЕЗПЕЧНИЙ ANTI-AFK (Не блокує меню Roblox)
+-- Безпечний Anti-AFK
 if getconnections then
     for _, v in next, getconnections(LocalPlayer.Idled) do
         v:Disable()
@@ -337,7 +348,7 @@ LocalPlayer.Idled:Connect(function()
     VirtualUser:Button2Up(Vector2.new(500, 500), Workspace.CurrentCamera.CFrame)
 end)
 
--- Очищення клієнтських скриптів античіта
+-- Очищення клієнтських скриптів
 pcall(function()
     local ps = LocalPlayer:WaitForChild("PlayerScripts", 4)
     if ps then
@@ -363,7 +374,7 @@ local function LoadSettings()
             _G.AutoExecute = (result.AutoExecute ~= nil) and result.AutoExecute or true
             _G.TotalSlapsFarmed = result.TotalSlapsFarmed or 0
             _G.TotalCandyFarmed = result.TotalCandyFarmed or 0
-            _G.HopDelay = result.HopDelay or 4
+            _G.HopDelay = result.HopDelay or 3.5
             _G.StaffKick = result.StaffKick or false
             return
         end
@@ -373,7 +384,7 @@ local function LoadSettings()
     _G.AutoExecute = true
     _G.TotalSlapsFarmed = 0
     _G.TotalCandyFarmed = 0
-    _G.HopDelay = 4
+    _G.HopDelay = 3.5
     _G.StaffKick = false
 end
 
@@ -417,11 +428,12 @@ local function DoServerHop()
     _G.AllowTeleport = true
     serverStartTime = tick()
     SaveSettings() 
+    ClearMemoryBeforeHop()
 
     pcall(function()
         OrionLib:MakeNotification({ 
             Name = "Server Hop", 
-            Content = "Searching for server...", 
+            Content = "All items collected! Hopping...", 
             Image = "rbxassetid://7734053426", 
             Time = 1.5 
         }) 
@@ -507,43 +519,41 @@ task.spawn(function()
     end
 end)
 
--- НАДІЙНИЙ ВХІД У ПОРТАЛ (Переміщує до порталу в лобі, щоб гра сама спавнила на арені)
 local function EnterArena()
-    local char = LocalPlayer.Character
-    if not char or not char:FindFirstChild("HumanoidRootPart") then return false end
-    if char:FindFirstChild("entered") then return true end
+    local c = LocalPlayer.Character
+    if not c or not c:FindFirstChild("HumanoidRootPart") then return false end
+    if c:FindFirstChild("entered") then return true end
 
     local lobby = Workspace:FindFirstChild("Lobby")
     local tp1 = lobby and lobby:FindFirstChild("Teleport1")
     if tp1 then
-        char.HumanoidRootPart.CFrame = tp1.CFrame
-        firetouchinterest(char.HumanoidRootPart, tp1, 0)
+        c.HumanoidRootPart.CFrame = tp1.CFrame
+        firetouchinterest(c.HumanoidRootPart, tp1, 0)
         task.wait(0.05)
-        firetouchinterest(char.HumanoidRootPart, tp1, 1)
+        firetouchinterest(c.HumanoidRootPart, tp1, 1)
 
-        local entered = char:WaitForChild("entered", 2)
+        local entered = c:WaitForChild("entered", 2)
         return entered ~= nil
     end
     return false
 end
 
--- ================= ДИСТАНЦІЙНИЙ ЛУТ БЕЗ ТЕЛЕПОРТІВ (СТОЇМО НА СПАВНІ) =================
-local function ZeroTpLootSlapples()
-    local char = LocalPlayer.Character
+-- ================= АКТИВНЕ ЛУТАННЯ ДО ОСТАННЬОЇ ЦУКЕРКИ/ЯБЛУКА =================
+local function HarvestSlapples()
+    local c = LocalPlayer.Character
     local lstats = LocalPlayer:FindFirstChild("leaderstats")
     local startSlaps = (lstats and lstats:FindFirstChild("Slaps")) and lstats.Slaps.Value or 0
+    local collected = false
 
-    if char and char:FindFirstChild("HumanoidRootPart") and char:FindFirstChild("entered") then
+    if c and c:FindFirstChild("HumanoidRootPart") and c:FindFirstChild("entered") then
         local arena = Workspace:FindFirstChild("Arena")
         if arena and arena:FindFirstChild("island5") and arena.island5:FindFirstChild("Slapples") then
-            for _ = 1, 4 do
-                for _, v in ipairs(arena.island5.Slapples:GetChildren()) do
-                    if (v.Name == "Slapple" or v.Name == "GoldenSlapple") and v:FindFirstChild("Glove") and v.Glove:FindFirstChildWhichIsA("TouchTransmitter") then
-                        firetouchinterest(char.HumanoidRootPart, v.Glove, 0)
-                        firetouchinterest(char.HumanoidRootPart, v.Glove, 1)
-                    end
+            for _, v in ipairs(arena.island5.Slapples:GetChildren()) do
+                if (v.Name == "Slapple" or v.Name == "GoldenSlapple") and v:FindFirstChild("Glove") and v.Glove:FindFirstChildWhichIsA("TouchTransmitter") then
+                    firetouchinterest(c.HumanoidRootPart, v.Glove, 0)
+                    firetouchinterest(c.HumanoidRootPart, v.Glove, 1)
+                    collected = true
                 end
-                task.wait(0.04)
             end
         end
     end
@@ -554,66 +564,94 @@ local function ZeroTpLootSlapples()
         _G.TotalSlapsFarmed = _G.TotalSlapsFarmed + gained
         SaveSettings()
     end
-    return gained
+    return collected, gained
 end
 
-local function ZeroTpLootCandy()
-    local char = LocalPlayer.Character
-    if not char or not char:FindFirstChild("Head") or not char:FindFirstChild("entered") then return 0 end
+local function HarvestCandy()
+    local c = LocalPlayer.Character
+    if not c or not c:FindFirstChild("Head") or not c:FindFirstChild("entered") then return false, 0 end
 
     local candyFolder = Workspace:FindFirstChild("CandyCorns")
-    if not candyFolder then return 0 end
+    if not candyFolder then return false, 0 end
 
-    local touched = 0
-    for _ = 1, 4 do
-        if not char:FindFirstChild("Head") then break end
-        for _, v in ipairs(candyFolder:GetChildren()) do
-            if v:FindFirstChildWhichIsA("TouchTransmitter") then
-                touched = touched + 1
-                firetouchinterest(char.Head, v, 0)
-                firetouchinterest(char.Head, v, 1)
-            end
+    local count = 0
+    for _, v in ipairs(candyFolder:GetChildren()) do
+        if v:FindFirstChildWhichIsA("TouchTransmitter") then
+            firetouchinterest(c.Head, v, 0)
+            firetouchinterest(c.Head, v, 1)
+            count = count + 1
         end
-        task.wait(0.04)
     end
 
-    if touched > 0 then
-        _G.TotalCandyFarmed = _G.TotalCandyFarmed + touched
+    if count > 0 then
+        _G.TotalCandyFarmed = _G.TotalCandyFarmed + count
         SaveSettings()
     end
-    return touched
+    return (count > 0), count
 end
 
--- ГОЛОВНИЙ ЦИКЛ: ВХІД В ПОРТАЛ -> ЛУТ НА СПАВНІ -> HOP
+-- ================= ГОЛОВНИЙ ЦИКЛ ЗБОРУ (ЗБИРАЄ ВСЕ ПЕРЕД ТЕЛЕПОРТОМ) =================
 local function UpdateMainFarmLoop()
     if _G.SlappleFarm or _G.CandyCornFarm then
         if not mainFarmThread then
             mainFarmThread = task.spawn(function()
                 while _G.SlappleFarm or _G.CandyCornFarm do
-                    local char = LocalPlayer.Character
+                    local c = LocalPlayer.Character
 
-                    if char and not char:FindFirstChild("entered") then
+                    if c and not c:FindFirstChild("entered") then
                         EnterArena()
-                        task.wait(0.4)
+                        task.wait(0.3)
                     end
 
-                    if char and char:FindFirstChild("entered") then
-                        local slaps = _G.SlappleFarm and ZeroTpLootSlapples() or 0
-                        local candies = _G.CandyCornFarm and ZeroTpLootCandy() or 0
+                    if c and c:FindFirstChild("entered") then
+                        local totalSlaps = 0
+                        local totalCandies = 0
 
-                        if slaps > 0 or candies > 0 then
+                        -- Фаза зачистки: перевіряємо, поки з'являються нові предмети
+                        local cleanPasses = 0
+                        local maxChecks = 10 -- До 10 перевірок (займає ~0.5-0.8 с)
+
+                        for _ = 1, maxChecks do
+                            local hadSlapple, gainedS = false, 0
+                            local hadCandy, gainedC = false, 0
+
+                            if _G.SlappleFarm then
+                                hadSlapple, gainedS = HarvestSlapples()
+                                totalSlaps = totalSlaps + gainedS
+                            end
+
+                            if _G.CandyCornFarm then
+                                hadCandy, gainedC = HarvestCandy()
+                                totalCandies = totalCandies + gainedC
+                            end
+
+                            if not hadSlapple and not hadCandy then
+                                cleanPasses = cleanPasses + 1
+                                if cleanPasses >= 2 then
+                                    -- Карта повністю чиста, нічого нового не з'явилося
+                                    break
+                                end
+                            else
+                                cleanPasses = 0
+                            end
+                            task.wait(0.06)
+                        end
+
+                        if totalSlaps > 0 or totalCandies > 0 then
                             pcall(function()
                                 OrionLib:MakeNotification({
-                                    Name = "0-TP Autofarm",
-                                    Content = string.format("+%d Slaps | +%d Candy", slaps, candies),
+                                    Name = "Harvest Complete",
+                                    Content = string.format("+%d Slaps | +%d Candy. Hopping...", totalSlaps, totalCandies),
                                     Image = "rbxassetid://7734053426",
                                     Time = 1.5
                                 })
                             end)
                         end
 
+                        -- Тільки коли все злутано — робимо затримку безпеки і міняємо сервер
                         task.wait(_G.HopDelay)
                         DoServerHop()
+
                         while _G.IsHopping and (_G.SlappleFarm or _G.CandyCornFarm) do
                             task.wait(0.5)
                         end
@@ -630,10 +668,10 @@ end
 
 -- ================= 3. ПОЛІТ ТА ХІТБОКС =================
 local function SetFly(state, speed)
-    local char = LocalPlayer.Character
-    if not char or not char:FindFirstChild("HumanoidRootPart") then return end
-    local hrp = char.HumanoidRootPart
-    local hum = char:FindFirstChildOfClass("Humanoid")
+    local c = LocalPlayer.Character
+    if not c or not c:FindFirstChild("HumanoidRootPart") then return end
+    local hrp = c.HumanoidRootPart
+    local hum = c:FindFirstChildOfClass("Humanoid")
 
     if state then
         if hum then hum.PlatformStand = true end
@@ -817,7 +855,7 @@ end
 
 -- ================= 5. ІНТЕРФЕЙС =================
 local Window = OrionLib:MakeWindow({
-    Name = "Slap Battles Hub [Anti-267 | 0-TP] 👏",
+    Name = "Slap Battles Hub [Anti-Crash | 0-TP] 👏",
     IntroText = "Slap Battles 👏",
     IntroIcon = "rbxassetid://15315284749",
     HidePremium = false,
@@ -840,7 +878,7 @@ task.spawn(function()
     end
 end)
 
-local HopSection = FarmTab:AddSection({Name = "Server-Hop Farm (Вхід в портал -> Збір на спавні -> Hop)"})
+local HopSection = FarmTab:AddSection({Name = "Server-Hop Farm (Чистить усе -> Hop)"})
 
 HopSection:AddSlider({
     Name = "Delay before Server Hop (sec)", 
@@ -871,7 +909,7 @@ HopSection:AddToggle({
     end
 })
 
-local InServerSection = FarmTab:AddSection({Name = "In-Server Farm (Без зміни сервера та БЕЗ ТП)"})
+local InServerSection = FarmTab:AddSection({Name = "In-Server Farm (Без зміни сервера)"})
 
 InServerSection:AddToggle({
     Name = "Candy Corn Farm (In-Server / Zero TP)",
@@ -947,7 +985,7 @@ InServerSection:AddToggle({
 })
 
 InServerSection:AddToggle({
-    Name = "Auto-Enter Arena (Always Active)",
+    Name = "Auto-Enter Arena",
     Default = false,
     Callback = function(Value)
         _G.AutoEnterArenaLoop = Value
@@ -1375,13 +1413,13 @@ MovementTab:AddToggle({
     end
 })
 
--- ================= БЕЗПЕЧНА КНОПКА UI (НЕ БЛОКУЄ КНОПКУ МЕНЮ ROBLOX) =================
+-- ================= БЕЗПЕЧНА КНОПКА UI =================
 pcall(function()
     if gethui and gethui():FindFirstChild("Orion") and not LocalPlayer.PlayerGui:FindFirstChild("ToggleUi") then
         local Ui = Instance.new("ScreenGui", LocalPlayer.PlayerGui)
         Ui.Name = "ToggleUi"
         Ui.ResetOnSpawn = false
-        Ui.DisplayOrder = 1 -- Нижче за CoreGui, кнопки налаштувань Roblox не перекриваються
+        Ui.DisplayOrder = 1
 
         local DaIcon = Instance.new("ImageButton", Ui)
         DaIcon.Size = UDim2.new(0, 42, 0, 42)
